@@ -49,23 +49,29 @@ class FolderMonitorService(win32serviceutil.ServiceFramework):
         self.running = False
 
     def SvcDoRun(self):
-        # Signal the service is running
+        servicemanager.LogInfoMsg("Hejhopp")
         servicemanager.LogMsg(
             servicemanager.EVENTLOG_INFORMATION_TYPE,
             servicemanager.PYS_SERVICE_STARTED,
             (self._svc_name_, "")
         )
         self.ReportServiceStatus(win32service.SERVICE_RUNNING)
-
-        # Run the main service logic
-        self.main()
+        servicemanager.LogInfoMsg("Service is running... Starting main logic.")
+        try:
+            self.main()
+        except Exception as e:
+            servicemanager.LogErrorMsg(f"Unhandled exception: {e}")
+            raise
 
     def main(self):
         folder_to_watch = "C:/Users/holme/OneDrive/Skrivbord/Install-Testing-System-Service"
         new_name_format = "Testing very nice"
 
+        servicemanager.LogInfoMsg("Service starting...")
+
         if not os.path.exists(folder_to_watch):
             servicemanager.LogErrorMsg(f"Folder does not exist: {folder_to_watch}")
+            self.running = False
             return
 
         # Set up the Watchdog observer
@@ -92,6 +98,7 @@ if __name__ == "__main__":
         # Standalone mode: Run folder monitoring directly
         folder_to_watch = "C:/Users/holme/OneDrive/Skrivbord/Install-Testing-System-Service"
         new_name_format = "Testing very nice"
+        
 
         if os.path.exists(folder_to_watch):
             print(f"Running in standalone mode. Monitoring: {folder_to_watch}")
