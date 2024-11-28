@@ -1,5 +1,9 @@
 import os
 import time
+import win32serviceutil
+import win32service
+import win32event
+import servicemanager
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -28,27 +32,87 @@ class FileRenameHandler(FileSystemEventHandler):
             except Exception as e:
                 print(f"Error renaming file {file_path}: {e}")
 
-def monitor_folder(folder_to_watch, new_name_format):
-    event_handler = FileRenameHandler(folder_to_watch, new_name_format)
-    observer = Observer()
-    observer.schedule(event_handler, folder_to_watch, recursive=False)
-    observer.start()
-    print(f"Monitoring folder: {folder_to_watch}")
+class FolderMonitorService(win32serviceutil.ServiceFramework):
+    _svc_name_ = "FolderMonitorService"
+    _svc_display_name_ = "Folder Monitor Service"
+    _svc_description_ = "Monitors a folder and renames files using Python and Watchdog."
 
-    try:
-        while True:
-            time.sleep(1)  # Keep the script running
-    except KeyboardInterrupt:
-        observer.stop()
-        print("Stopped monitoring.")
-    observer.join()
+    def __init__(self, args):
+        super().__init__(args)
+        self.stop_event = win32event.CreateEvent(None, 0, 0, None)
+        self.running = True
+
+    def SvcStop(self):
+        # Signal the service is stopping
+        self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
+        win32event.SetEvent(self.stop_event)
+        self.running = False
+
+    def SvcDoRun(self):
+        # Signal the service is running
+        servicemanager.LogMsg(
+            servicemanager.EVENTLOG_INFORMATION_TYPE,
+            servicemanager.PYS_SERVICE_STARTED,
+            (self._svc_name_, "")
+        )
+        self.ReportServiceStatus(win32service.SERVICE_RUNNING)
+
+        # Run the main service logic
+        self.main()
+
+    def main(self):
+        folder_to_watch = "C:/Users/holme/OneDrive/Skrivbord/Install-Testing-System-Service"
+        new_name_format = "Testing very nice"
+
+        if not os.path.exists(folder_to_watch):
+            servicemanager.LogErrorMsg(f"Folder does not exist: {folder_to_watch}")
+            return
+
+        # Set up the Watchdog observer
+        event_handler = FileRenameHandler(folder_to_watch, new_name_format)
+        observer = Observer()
+        observer.schedule(event_handler, folder_to_watch, recursive=False)
+        observer.start()
+        servicemanager.LogInfoMsg(f"Monitoring folder: {folder_to_watch}")
+
+        try:
+            while self.running:
+                time.sleep(1)  # Keep the service running
+        except Exception as e:
+            servicemanager.LogErrorMsg(f"Service encountered an error: {e}")
+        finally:
+            observer.stop()
+            observer.join()
+            servicemanager.LogInfoMsg("Service stopped monitoring.")
 
 if __name__ == "__main__":
-    #folder_to_watch = input("Enter the folder path to monitor: ").strip()
-    folder_to_watch = "C:/Users/holme/OneDrive/Skrivbord/Install-Testing-System-Service"
-    new_name_format = "Testing very nice"
+    import sys
 
-    if os.path.exists(folder_to_watch):
-        monitor_folder(folder_to_watch, new_name_format)
+    if len(sys.argv) > 1 and sys.argv[1] == "standalone":
+        # Standalone mode: Run folder monitoring directly
+        folder_to_watch = "C:/Users/holme/OneDrive/Skrivbord/Install-Testing-System-Service"
+        new_name_format = "Testing very nice"
+
+        if os.path.exists(folder_to_watch):
+            print(f"Running in standalone mode. Monitoring: {folder_to_watch}")
+            try:
+                event_handler = FileRenameHandler(folder_to_watch, new_name_format)
+                observer = Observer()
+                observer.schedule(event_handler, folder_to_watch, recursive=False)
+                observer.start()
+
+                try:
+                    while True:
+                        time.sleep(1)  # Keep the script running
+                except KeyboardInterrupt:
+                    observer.stop()
+                    print("Stopped monitoring.")
+                observer.join()
+            except Exception as e:
+                print(f"An error occurred: {e}")
+        else:
+            print("The specified folder does not exist.")
     else:
-        print("The specified folder does not exist.")
+        # Service mode: Handle service commands
+        win32serviceutil.HandleCommandLine(FolderMonitorService)
+
