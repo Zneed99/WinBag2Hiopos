@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 import pytz
 import csv
+import time
 
 def export_action(file_paths):
     print("Exporting data...")
@@ -73,29 +74,33 @@ def map_serie_to_file_name(serie_value):
 
 def data_01_02(följesedlar_data, file_list):
 
+    time.sleep(5)
     file_data = {}
+    current_number = None
 
     for _, row in följesedlar_data.iterrows():
 
         serie = row["Serie"]
+        number = row["Nummer"]
+        
 
         #01 Mapped values
-        shop_id = row["Id. Shop"]  # Finns både shop_id och id_shop
-        cash_register_id = row["Id. Shop"]  # Vet inte vilken denna är
-        customer_id = row["Customer Id."]
-        date = row["Date"]
-        reference = row["Reference"]
-        receipt_id = row["Reference"]  # Vet inte vilken denna är
-        seller_id = row["Employee"]  # Är detta rätt?
+        shop_id = row["Butikskod"]
+        cash_register_id = row["KassaId"]
+        customer_id = row["Kundkod"]
+        date = row["Datum"]
+        reference = row["Referens"]
+        receipt_id = row["Referens"]  # Vet inte vilken denna är
+        seller_id = row["Anställd"]
 
         #02 Mapped values
-        article = row["Product"]
-        article_id = row["Product"]
-        quantity = row["Qty.1"]  # Finns Qty.1 och Qty.
-        brutto = row["Gross Amount"]
-        netto = row["Net Amount"]
-        moms = row["Net Amount"]  # Vet inte vad denna är
-        discount = row["Net Amount"]  # Är detta "Discount" eller "Discount Amount"?
+        article = row["Artikel"]
+        article_id = row["Artikel"] #Vet inte vilken denna är
+        quantity = row["Ant."]
+        brutto = row["Bas"] #Är detta rätt?
+        netto = row["Netto"]
+        moms = row["Total moms"]
+        discount = row["Total moms"] #Vet inte vilken denna är
 
 
         # Find the matching file in file_list
@@ -111,16 +116,20 @@ def data_01_02(följesedlar_data, file_list):
             file_data[matching_file] = []
 
         # Create the custom mapping for all rows
-        mapped_row_01 = [
-            "01",
-            shop_id,
-            cash_register_id,
-            customer_id,
-            date,
-            reference,
-            receipt_id,
-            seller_id
-        ]
+        # Only add a new "01" row if the "Nummer" changes
+        if current_number != number:
+            mapped_row_01 = [
+                "01",
+                shop_id,
+                cash_register_id,
+                customer_id,
+                date,
+                reference,
+                receipt_id,
+                seller_id
+            ]
+            file_data[matching_file].append(mapped_row_01)
+            current_number = number  # Update the current "Nummer"
 
         mapped_row_02 = [
             "02",
