@@ -2,7 +2,6 @@ import os
 import pandas as pd
 from datetime import datetime
 import pytz
-import csv
 import time
 
 
@@ -14,7 +13,7 @@ def export_action(file_paths):
     time.sleep(1)
 
     for file_path in file_paths:
-        file_name = os.path.basename(file_path)  # Extract only the file name
+        file_name = os.path.basename(file_path)
         if "Försäljning" in file_name:
             forsäljning_data = pd.read_csv(file_path, sep=";")
         elif "Betalsätt" in file_name:
@@ -25,7 +24,7 @@ def export_action(file_paths):
     if forsäljning_data is None or betalsätt_data is None or följesedlar_data is None:
         raise ValueError("One or more required files are missing from the file paths.")
 
-    target_folder = "C:/Users/FelixHolmesten/OneDrive - LexEnergy/Skrivbordet/InstallSystemService/Exported_Files"
+    target_folder = "C:/Users/FelixHolmesten/InstallSystemService/Exported Files"
 
     file_list = create_resulting_files(forsäljning_data, target_folder)
 
@@ -34,6 +33,13 @@ def export_action(file_paths):
     # Perform additional functionality
     data_01_02(följesedlar_data, file_list)
     data_03_04(betalsätt_data, file_list)
+    data_05(forsäljning_data, file_list)
+    data_06(forsäljning_data, file_list)
+    data_07(forsäljning_data, file_list)
+    data_08(forsäljning_data, file_list)
+    data_09(forsäljning_data, file_list)
+    data_10(forsäljning_data, file_list)
+    data_11(forsäljning_data, file_list)
 
     data_99(file_list)
 
@@ -72,9 +78,19 @@ def create_resulting_files(forsäljning_data, target_folder):
     return created_files
 
 
-# Map "Serie" values to file names (ignoring the first two characters)
 def map_serie_to_file_name(serie_value):
+    """Map the 'Serie' value to a file name(ignoring the first two characters)"""
     return f"T0{serie_value[2:]}"
+
+
+def data_00(file_list):
+    header_row = ["00", "20120720_001", "1.3.15"]
+
+    for target_file in file_list:
+        # Append the header row to each file
+        with open(target_file, "a") as f:
+            quoted_row = [f'"{value}"' for value in header_row]
+            f.write(",".join(quoted_row) + "\n")
 
 
 def data_01_02(följesedlar_data, file_list):
@@ -155,7 +171,6 @@ def data_01_02(följesedlar_data, file_list):
                 # Add quotes around each value
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
-        # print(f"Appended rows to file: {target_file}")
 
 
 def data_03_04(betalsätt_data, file_list):
@@ -194,8 +209,6 @@ def data_03_04(betalsätt_data, file_list):
                 if betalmedel not in betalmedel_sums:
                     betalmedel_sums[betalmedel] = {"debet": 0, "kredit": 0}
                 betalmedel_sums[betalmedel]["debet"] += debetbelopp
-                if betalmedel == "KORT":
-                    print(f"Sum for KORT: {betalmedel_sums[betalmedel]['debet']}")
             elif dokumenttyp == "Sale receipt return":
                 if betalmedel not in betalmedel_sums:
                     betalmedel_sums[betalmedel] = {"debet": 0, "kredit": 0}
@@ -218,14 +231,13 @@ def data_03_04(betalsätt_data, file_list):
         if matching_file not in file_data:
             file_data[matching_file] = []
 
-    for betalmedel, sums in betalmedel_sums.items():
-        debetbelopp = sums["debet"]
-        kreditbelopp = sums["kredit"]
-        print(
-            f"betalmedel: {betalmedel}, debetbelopp: {debetbelopp}, kreditbelopp: {kreditbelopp}"
-        )
+    # for betalmedel, sums in betalmedel_sums.items():
+    #     debetbelopp = sums["debet"]
+    #     kreditbelopp = sums["kredit"]
+    #     print(
+    #         f"betalmedel: {betalmedel}, debetbelopp: {debetbelopp}, kreditbelopp: {kreditbelopp}"
+    #     )
 
-    # Create the custom mapping for all rows
     # Only add a new "03" row if the "Nummer" changes
     if current_number == None:
         mapped_row_03 = ["03", butiks_nr, kassa_nr, datum]
@@ -246,10 +258,26 @@ def data_03_04(betalsätt_data, file_list):
                 # Add quotes around each value
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
-        print(f"Appended rows to file: {target_file}")
 
 
-def data_05_12(försäljning_data, file_list):
+def data_05(försäljning_data, file_list):
+
+    for _, row in försäljning_data.iterrows():
+        # Mapped values for 05
+        butiksNr = row["Butik"]  # Vet inte om denna är rätt
+        kassaNr = row["KassaId"]  # Tror denna är rätt
+        date = row["Dok.datum"]
+
+    mapped_row_05 = ["05", butiksNr, kassaNr, date]
+
+    for target_file in file_list:
+        # Append the header row to each file
+        with open(target_file, "a") as f:
+            quoted_row = [f'"{value}"' for value in mapped_row_05]
+            f.write(",".join(quoted_row) + "\n")
+
+
+def data_06(försäljning_data, file_list):
 
     file_data = {}
 
@@ -257,9 +285,18 @@ def data_05_12(försäljning_data, file_list):
 
         # Mapped values
         serie = row["Serie"]
-        number = row["Number"]
-        line_number = row["Line Number"]
-        store = row["Store"]
+
+        # Mapped values for odd rows
+        artikelNr = row["Artikelkod"]
+        antal = row["KassaId"]  # Tror denna saknas i filen så tar något annat sålänge
+        pris = row["Pris "]
+        tid = row["Timme"]  # Fel format
+        säljare = row[
+            "Lagerplats"
+        ]  # Tror denna saknas i filen så tar något annat sålänge
+        moms = row["Moms"]
+
+        doktyp = row["Dokumenttyp"]
 
         # Find the matching file in file_list
         target_file = map_serie_to_file_name(serie)
@@ -275,63 +312,13 @@ def data_05_12(försäljning_data, file_list):
         if matching_file not in file_data:
             file_data[matching_file] = []
 
+        if doktyp == "Sale receipt return":
+            # Create the custom mapping for all rows
+            antal = -antal  # Negate the quantity for return rows
+
         # Create the custom mapping for all rows
-        mapped_row_05 = [
-            "03",
-            serie,
-            number,
-        ]
-
-        mapped_row_06 = [
-            "03",
-            serie,
-            number,
-        ]
-
-        mapped_row_07 = [
-            "03",
-            serie,
-            number,
-        ]
-
-        mapped_row_08 = [
-            "03",
-            serie,
-            number,
-        ]
-
-        mapped_row_09 = [
-            "03",
-            serie,
-            number,
-        ]
-
-        mapped_row_10 = [
-            "03",
-            serie,
-            number,
-        ]
-
-        mapped_row_11 = [
-            "03",
-            serie,
-            number,
-        ]
-
-        mapped_row_12 = [
-            "04",
-            line_number,
-            store,
-        ]
-
-        file_data[matching_file].append(mapped_row_05)
+        mapped_row_06 = ["06", artikelNr, antal, pris, tid, säljare, moms]
         file_data[matching_file].append(mapped_row_06)
-        file_data[matching_file].append(mapped_row_07)
-        file_data[matching_file].append(mapped_row_08)
-        file_data[matching_file].append(mapped_row_09)
-        file_data[matching_file].append(mapped_row_10)
-        file_data[matching_file].append(mapped_row_11)
-        file_data[matching_file].append(mapped_row_12)
 
     # Write each set of rows to its corresponding file
     for target_file, rows in file_data.items():
@@ -340,18 +327,201 @@ def data_05_12(försäljning_data, file_list):
                 # Add quotes around each value
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
-        print(f"Appended rows to file: {target_file}")
 
 
-def data_00(file_list):
-    header_row = ["00", "20120720_001", "1.3.15"]
+def data_07(försäljning_data, file_list):
+
+    for _, row in försäljning_data.iterrows():
+        # Mapped values for 07
+        butiksNr = row["Butik"]  # Vet inte om denna är rätt
+        kassaNr = row["KassaId"]  # Tror denna är rätt
+        date = row["Dok.datum"]
+
+    mapped_row_07 = ["07", butiksNr, kassaNr, date]
 
     for target_file in file_list:
         # Append the header row to each file
         with open(target_file, "a") as f:
-            quoted_row = [f'"{value}"' for value in header_row]
+            quoted_row = [f'"{value}"' for value in mapped_row_07]
             f.write(",".join(quoted_row) + "\n")
-        print(f"Added header to file: {target_file}")
+
+
+def data_08(försäljning_data, file_list):
+
+    file_data = {}
+
+    # Dictionary to store the aggregated data for varugrupp
+    varugrupp_data = {}
+
+    for _, row in försäljning_data.iterrows():
+        # Mapped values
+        serie = row["Serie"]
+        antal = row["KassaId"]  # Denna saknas i filen
+        pris = row["Pris "]
+        moms = row["Moms"]  # Finns flera moms att välja mellan
+        varugrupp = row["Varugrupp"]  # The grouping variable
+
+        doktyp = row["Dokumenttyp"]
+
+        # Find the matching file in file_list
+        target_file = map_serie_to_file_name(serie)
+        target_file_partial = f"{target_file}"
+        matching_file = next((f for f in file_list if target_file_partial in f), None)
+
+        if not matching_file:
+            print(
+                f"Warning: Target file {target_file_partial} not found in file_list. Skipping row."
+            )
+            continue
+
+        if matching_file not in file_data:
+            file_data[matching_file] = []
+
+        # If doktyp is "Sale receipt return", negate the quantity and price
+        if doktyp == "Sale receipt return":
+            antal = -antal  # Negate the quantity for return rows
+            pris = -pris  # Negate the price for return rows
+
+        # Aggregate the data for varugrupp
+        if varugrupp not in varugrupp_data:
+            varugrupp_data[varugrupp] = {"antal": 0, "total_pris": 0, "total_moms": 0}
+
+        moms = moms.replace(",", ".")  # Replace comma with dot
+
+        varugrupp_data[varugrupp]["antal"] += int(antal)
+        varugrupp_data[varugrupp]["total_pris"] += float(pris)
+        varugrupp_data[varugrupp]["total_moms"] += float(moms)
+
+    # Now, map the aggregated data into rows for the file
+    for target_file, rows in file_data.items():
+        for varugrupp, data in varugrupp_data.items():
+            data["total_moms"] = str(data["total_moms"]).replace(".", ",")
+
+            mapped_row_08 = [
+                "08",
+                varugrupp,
+                data["antal"],
+                data["total_pris"],
+                data["total_moms"],
+            ]
+            rows.append(mapped_row_08)
+
+        # Write the aggregated rows to the corresponding file
+        with open(target_file, "a") as f:
+            for row in rows:
+                # Add quotes around each value
+                quoted_row = [f'"{value}"' for value in row]
+                f.write(",".join(quoted_row) + "\n")
+
+
+def data_09(försäljning_data, file_list):
+
+    for _, row in försäljning_data.iterrows():
+        # Mapped values for 09
+        butiksNr = row["Butik"]  # Vet inte om denna är rätt
+        kassaNr = row["KassaId"]  # Tror denna är rätt
+        date = row["Dok.datum"]
+
+    mapped_row_09 = ["09", butiksNr, kassaNr, date]
+
+    for target_file in file_list:
+        # Append the header row to each file
+        with open(target_file, "a") as f:
+            quoted_row = [f'"{value}"' for value in mapped_row_09]
+            f.write(",".join(quoted_row) + "\n")
+
+
+def data_10(försäljning_data, file_list):
+    file_data = {}
+
+    # Dictionary to store the aggregated data for each time interval
+    time_interval_data = {}
+
+    for _, row in försäljning_data.iterrows():
+        # Mapped values
+        serie = row["Serie"]
+        antal = row["KassaId"]  # Assuming this is still the quantity
+        pris = row["Pris "]
+        tid = row["Timme"]  # Time value in "HH:mm" format
+
+        doktyp = row["Dokumenttyp"]
+
+        # Find the matching file in file_list
+        target_file = map_serie_to_file_name(serie)
+        target_file_partial = f"{target_file}"
+        matching_file = next((f for f in file_list if target_file_partial in f), None)
+
+        if not matching_file:
+            print(
+                f"Warning: Target file {target_file_partial} not found in file_list. Skipping row."
+            )
+            continue
+
+        if matching_file not in file_data:
+            file_data[matching_file] = []
+
+        # If doktyp is "Sale receipt return", negate the quantity and price
+        if doktyp == "Sale receipt return":
+            antal = -antal  # Negate the quantity for return rows
+            pris = -pris  # Negate the price for return rows
+
+        # Convert the time (tid) to the interval format
+        time_parts = tid.split(":")
+        hour = int(time_parts[0])
+
+        # Any time between "x.00" and "x.59" belongs to the interval "x.00 - x+1.00"
+        start_time = f"{hour}.00"
+        end_time = (
+            f"{hour + 1}.00" if hour + 1 < 24 else "0.00"
+        )  # Wrap around to "0.00" at midnight
+
+        time_interval = f"{start_time} - {end_time}"
+
+        # Aggregate the data for each time interval
+        if time_interval not in time_interval_data:
+            time_interval_data[time_interval] = {"antal": 0, "total_pris": 0}
+
+        time_interval_data[time_interval]["antal"] += antal
+        time_interval_data[time_interval][
+            "total_pris"
+        ] += pris  # Total price per interval
+
+    # Now, map the aggregated data into rows for the file
+    for target_file, rows in file_data.items():
+        for time_interval, data in time_interval_data.items():
+            mapped_row_10 = [
+                "10",  # Identifier for 10 type
+                time_interval,  # Time interval
+                data["antal"],  # Total quantity for the interval
+                data["total_pris"],  # Total price for the interval
+            ]
+
+            # Append the row to the list
+            rows.append(mapped_row_10)
+
+        # Write the aggregated rows to the corresponding file
+        with open(target_file, "a") as f:
+            for row in rows:
+                # Add quotes around each value
+                quoted_row = [f'"{value}"' for value in row]
+                f.write(",".join(quoted_row) + "\n")
+
+
+def data_11(försäljning_data, file_list):
+
+    for _, row in försäljning_data.iterrows():
+        # Mapped values for 11
+        butiksNr = row["Butik"]  # Vet inte om denna är rätt
+        kassaNr = row["KassaId"]  # Tror denna är rätt
+        date = row["Dok.datum"]
+
+    mapped_row_11 = ["11", butiksNr, kassaNr, date]
+
+    for target_file in file_list:
+        # Append the header row to each file
+        with open(target_file, "a") as f:
+            quoted_row = [f'"{value}"' for value in mapped_row_11]
+            f.write(",".join(quoted_row) + "\n")
 
 
 def data_99(file_list):
@@ -362,4 +532,3 @@ def data_99(file_list):
         with open(target_file, "a") as f:
             quoted_row = [f'"{value}"' for value in footer_row]
             f.write(",".join(quoted_row) + "\n")
-        print(f"Added footer to file: {target_file}")
