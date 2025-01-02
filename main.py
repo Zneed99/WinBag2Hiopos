@@ -108,7 +108,8 @@ def monitor_folder(folder_to_watch, required_files):
 
 if __name__ == "__main__":
     # Define the folder to watch and the required files
-    folder_to_watch = "C:/Users/FelixHolmesten/InstallSystemService"
+    #folder_to_watch = "C:/Users/FelixHolmesten/InstallSystemService"
+    folder_to_watch = "C:/Users/holme/OneDrive/Skrivbord/Install-Testing-System-Service"
     required_files = ["Försäljning.csv", "Betalsätt.csv", "Följesedlar.csv"]
 
     if os.path.exists(folder_to_watch):
