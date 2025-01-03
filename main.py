@@ -128,11 +128,10 @@ def monitor_folder(folder_to_watch, export_required_files, import_required_file)
 
 
 if __name__ == "__main__":
-    folder_to_watch = "C:/Users/FelixHolmesten/InstallSystemService"
-    # The original 3 required export files
-    export_required_files = ["Försäljning.csv", "Betalsätt.csv", "Följesedlar.csv"]
-    # The one required file for import
-    import_required_file = "PCS.ADM"
+    # Define the folder to watch and the required files
+    # folder_to_watch = "C:/Users/FelixHolmesten/InstallSystemService"
+    folder_to_watch = "C:/Users/holme/OneDrive/Skrivbord/Install-Testing-System-Service"
+    required_files = ["Försäljning.csv", "Betalsätt.csv", "Följesedlar.csv"]
 
     if os.path.exists(folder_to_watch):
         monitor_folder(folder_to_watch, export_required_files, import_required_file)

@@ -24,7 +24,8 @@ def export_action(file_paths):
     if forsäljning_data is None or betalsätt_data is None or följesedlar_data is None:
         raise ValueError("One or more required files are missing from the file paths.")
 
-    target_folder = "C:/Users/FelixHolmesten/InstallSystemService/Exported Files"
+    #target_folder = "C:/Users/FelixHolmesten/InstallSystemService/Exported Files"
+    target_folder = "C:/Users/holme/OneDrive/Skrivbord/Install-Testing-System-Service/Exported Files"
 
     file_list = create_resulting_files(forsäljning_data, target_folder)
 
