@@ -128,13 +128,21 @@ def monitor_folder(folder_to_watch, export_required_files, import_required_file)
 
 
 if __name__ == "__main__":
-    # Define the folder to watch and the required files
-    # folder_to_watch = "C:/Users/FelixHolmesten/InstallSystemService"
-    folder_to_watch = "C:/Users/holme/OneDrive/Skrivbord/Install-Testing-System-Service"
+
+    # Default to home directory + "InstallSystemService"
+    folder_to_watch = os.path.join(os.path.expanduser("~"), "InstallSystemService")
+
     export_required_files = ["Försäljning.csv", "Betalsätt.csv", "Följesedlar.csv"]
     import_required_file = "PCS.ADM"
 
     if os.path.exists(folder_to_watch):
+        print(f"Monitoring folder: {folder_to_watch}")
         monitor_folder(folder_to_watch, export_required_files, import_required_file)
     else:
-        print("The specified folder does not exist.")
+        print(f"The specified folder does not exist: {folder_to_watch}. Creating it...")
+        try:
+            os.makedirs(folder_to_watch)
+            print(f"Created folder: {folder_to_watch}")
+            monitor_folder(folder_to_watch, export_required_files, import_required_file)
+        except Exception as e:
+            print(f"Failed to create folder {folder_to_watch}. Error: {e}")

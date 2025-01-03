@@ -24,10 +24,11 @@ def export_action(file_paths):
     if forsäljning_data is None or betalsätt_data is None or följesedlar_data is None:
         raise ValueError("One or more required files are missing from the file paths.")
 
-    #target_folder = "C:/Users/FelixHolmesten/InstallSystemService/Exported Files"
-    target_folder = "C:/Users/holme/OneDrive/Skrivbord/Install-Testing-System-Service/Exported Files"
+    file_path = file_paths[0]
+    base_dir = os.path.dirname(file_path)
+    export_folder = os.path.join(base_dir, "Exported Files")
 
-    file_list = create_resulting_files(forsäljning_data, target_folder)
+    file_list = create_resulting_files(forsäljning_data, export_folder)
 
     data_00(file_list)
 
@@ -44,7 +45,7 @@ def export_action(file_paths):
 
     data_99(file_list)
 
-    print(f"All files saved to folder: {target_folder}")
+    print(f"All files saved to folder: {export_folder}")
 
     # Add further export functionality here
 
