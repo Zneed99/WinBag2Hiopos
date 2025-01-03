@@ -57,7 +57,7 @@ def create_resulting_files(forsäljning_data, target_folder):
 
     # Get the current timestamp in Stockholm timezone
     stockholm_tz = pytz.timezone("Europe/Stockholm")
-    timestamp = datetime.now(stockholm_tz).strftime("%H-%M-%S")
+    timestamp = datetime.now(stockholm_tz).strftime("%Y%m%d-%H-%M-%S")
 
     # Extract unique values from the "Serie" column
     unique_series = forsäljning_data["Serie"].unique()
