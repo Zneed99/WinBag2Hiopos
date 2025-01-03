@@ -131,7 +131,8 @@ if __name__ == "__main__":
     # Define the folder to watch and the required files
     # folder_to_watch = "C:/Users/FelixHolmesten/InstallSystemService"
     folder_to_watch = "C:/Users/holme/OneDrive/Skrivbord/Install-Testing-System-Service"
-    required_files = ["Försäljning.csv", "Betalsätt.csv", "Följesedlar.csv"]
+    export_required_files = ["Försäljning.csv", "Betalsätt.csv", "Följesedlar.csv"]
+    import_required_file = "PCS.ADM"
 
     if os.path.exists(folder_to_watch):
         monitor_folder(folder_to_watch, export_required_files, import_required_file)
