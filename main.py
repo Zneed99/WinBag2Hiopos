@@ -129,12 +129,17 @@ def monitor_folder(folder_to_watch, export_required_files, import_required_file)
 
 if __name__ == "__main__":
 
-    # Default to home directory + "InstallSystemService"
+    # Default to home directory + "WinBag2Hipos-SystemService"
     folder_to_watch = os.path.join(
         os.path.expanduser("~"), "WinBag2Hipos-SystemService"
     )
 
-    export_required_files = ["Försäljning.csv", "Betalsätt.csv", "Följesedlar.csv"]
+    export_required_files = [
+        "Försäljning.csv",
+        "Betalsätt.csv",
+        "Följesedlar.csv",
+        "Moms.csv",
+    ]
     import_required_file = "PCS.ADM"
 
     if os.path.exists(folder_to_watch):

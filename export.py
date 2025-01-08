@@ -20,8 +20,15 @@ def export_action(file_paths):
             betalsätt_data = pd.read_csv(file_path, sep=";")
         elif "Följesedlar" in file_name:
             följesedlar_data = pd.read_csv(file_path, sep=";")
+        elif "Moms" in file_name:
+            moms_data = pd.read_csv(file_path, sep=";")
 
-    if forsäljning_data is None or betalsätt_data is None or följesedlar_data is None:
+    if (
+        forsäljning_data is None
+        or betalsätt_data is None
+        or följesedlar_data is None
+        or moms_data is None
+    ):
         raise ValueError("One or more required files are missing from the file paths.")
 
     file_path = file_paths[0]
@@ -42,6 +49,7 @@ def export_action(file_paths):
     data_09(forsäljning_data, file_list)
     data_10(forsäljning_data, file_list)
     data_11(forsäljning_data, file_list)
+    data_12(moms_data, file_list)
 
     data_99(file_list)
 
@@ -511,13 +519,46 @@ def data_10(försäljning_data, file_list):
 
 def data_11(försäljning_data, file_list):
 
+    file_data = {}
+
     for _, row in försäljning_data.iterrows():
+
+        # Mapped values
+        serie = row["Serie"]
+
         # Mapped values for 11
         butiksNr = row["Butik"]  # Vet inte om denna är rätt
         kassaNr = row["KassaId"]  # Tror denna är rätt
         date = row["Dok.datum"]
 
-    mapped_row_11 = ["11", butiksNr, kassaNr, date]
+        # Find the matching file in file_list
+        target_file = map_serie_to_file_name(serie)
+        target_file_partial = f"{target_file}"
+        matching_file = next((f for f in file_list if target_file_partial in f), None)
+
+        if matching_file not in file_data:
+            file_data[matching_file] = []
+
+        mapped_row_11 = ["11", butiksNr, kassaNr, date]
+        file_data[matching_file].append(mapped_row_11)
+
+    for target_file in file_list:
+        # Append the header row to each file
+        with open(target_file, "a") as f:
+            quoted_row = [f'"{value}"' for value in mapped_row_11]
+            f.write(",".join(quoted_row) + "\n")
+
+
+def data_12(moms_data, file_list):
+
+    for _, row in moms_data.iterrows():
+        # Mapped values for 11
+        moms = row["Moms"]  # Vet inte om denna är rätt
+        basbelopp = row["Basbelopp"]  # Tror denna är rätt
+        moms_2 = row.iloc[4]
+        total_belopp = row["Totalbelopp"]
+
+    mapped_row_11 = ["12", moms, basbelopp, moms_2, total_belopp]
 
     for target_file in file_list:
         # Append the header row to each file
