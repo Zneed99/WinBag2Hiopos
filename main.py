@@ -2,6 +2,7 @@ import os
 import shutil
 import time
 import pytz
+import traceback
 from datetime import datetime
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -33,6 +34,8 @@ def move_files_to_old_folder(file_paths, folder_to_watch):
         print(f"Moved {file_name} to 'Old Files' as {new_file_name}.")
 
 
+import traceback
+
 def custom_export_action(file_paths, folder_to_watch):
     """Wrap export_action in try-except with logging/messaging."""
     try:
@@ -40,8 +43,10 @@ def custom_export_action(file_paths, folder_to_watch):
         export_action(file_paths)
         move_files_to_old_folder(file_paths, folder_to_watch)
     except Exception as e:
-        # Log or handle the error
-        print(f"An error occurred during export_action: {e}")
+        # Capture the full traceback
+        tb = traceback.format_exc()
+        print(f"An error occurred during export_action:\n{tb}")
+
 
 
 def custom_import_action(file_path, folder_to_watch):
@@ -52,7 +57,8 @@ def custom_import_action(file_path, folder_to_watch):
         move_files_to_old_folder(file_path, folder_to_watch)
     except Exception as e:
         # Log or handle the error
-        print(f"An error occurred during import_action: {e}")
+        tb = traceback.format_exc()
+        print(f"An error occurred during import_action: {tb}")
 
 
 class FileRenameHandler(FileSystemEventHandler):

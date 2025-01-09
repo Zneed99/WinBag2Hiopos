@@ -8,6 +8,7 @@ import time
 def export_action(file_paths):
     # Match file names to specific data objects
     forsäljning_data = None
+    forsäljning_data10 = None
     betalsätt_data = None
     följesedlar_data = None
     time.sleep(1)
@@ -15,7 +16,7 @@ def export_action(file_paths):
     for file_path in file_paths:
         file_name = os.path.basename(file_path)
         if "Försäljning" in file_name:
-            forsäljning_data = pd.read_csv(file_path, sep=";")
+            forsäljning_data = pd.read_csv(file_path, sep=";", dtype={"Referens": str, "Netto": str})
         elif "Betalsätt" in file_name:
             betalsätt_data = pd.read_csv(file_path, sep=";")
         elif "Följesedlar" in file_name:
@@ -41,7 +42,8 @@ def export_action(file_paths):
 
     # Perform additional functionality
     data_01_02(följesedlar_data, file_list)
-    data_03_04(betalsätt_data, file_list)
+    data_03(forsäljning_data, file_list)
+    data_04(betalsätt_data, file_list)
     data_05(forsäljning_data, file_list)
     data_06(forsäljning_data, file_list)
     data_07(forsäljning_data, file_list)
@@ -104,75 +106,77 @@ def data_00(file_list):
 
 
 def data_01_02(följesedlar_data, file_list):
-
     file_data = {}
     current_number = None
 
-    for _, row in följesedlar_data.iterrows():
+    # Group data by "Nummer"
+    grouped_data = följesedlar_data.groupby("Nummer")
 
-        serie = row["Serie"]
-        number = row["Nummer"]
+    for number, group in grouped_data:
+        # Find the first row with missing `article_id`
+        missing_article_row = group[group["Referens"].isna() | (group["Referens"] == "")].head(1)
 
-        # 01 Mapped values
-        shop_id = row["Butikskod"]
-        cash_register_id = row["KassaId"]
-        customer_id = row["Kundkod"]
-        date = row["Datum"]
-        reference = row["Benämning"] # TODO Denna ska ändras, se post it kommentar
-        receipt_id = row["Nummer"]
-        seller_id = row["Anställd"]
+        # Determine the reference value based on missing `article_id`
+        if not missing_article_row.empty:
+            reference = missing_article_row.iloc[0]["Benämning"]  # Take the "Benämning" from the first missing "Referens"
+        else:
+            reference = ""  # No missing article_id, set reference to empty string
 
-        # 02 Mapped values
-        article = row["Artikel"]
-        article_id = row["Referens"]
-        quantity = row["Ant."]
-        brutto = row["Pris"]
-        netto = row["Netto"] # TODO Denna saknas, pappa fixar(nettopris/exklusive moms)
-        moms = row["Total moms"]
-        discount = row["Total moms"]  # TODO Denna saknas, pappa fixar (Rabatt?)
+        # Create the "01" row (unique per "Nummer")
+        first_row = group.iloc[0]
+        shop_id = first_row["Butikskod"]
+        cash_register_id = first_row["KassaId"]
+        customer_id = first_row["Kundkod"]
+        date = first_row["Dok.datum"]
+        receipt_id = first_row["Nummer"]
+        seller_id = first_row["Anställd"]
 
         # Find the matching file in file_list
+        serie = first_row["Serie"]
         target_file = map_serie_to_file_name(serie)
         target_file_partial = f"{target_file}"
         matching_file = next((f for f in file_list if target_file_partial in f), None)
 
         if not matching_file:
             print(
-                f"Warning: Target file {target_file_partial} not found in file_list. Skipping row."
+                f"Warning: Target file {target_file_partial} not found in file_list. Skipping group."
             )
             continue
 
         if matching_file not in file_data:
             file_data[matching_file] = []
 
-        # Create the custom mapping for all rows
-        # Only add a new "01" row if the "Nummer" changes
-        if current_number != number:
-            mapped_row_01 = [
-                "01",
-                shop_id,
-                cash_register_id,
-                customer_id,
-                date,
-                reference,
-                receipt_id,
-                seller_id,
-            ]
-            file_data[matching_file].append(mapped_row_01)
-            current_number = number  # Update the current "Nummer"
-
-        mapped_row_02 = [
-            "02",
-            article,
-            article_id,
-            quantity,
-            brutto,
-            netto,
-            moms,
-            discount,
+        mapped_row_01 = [
+            "01",
+            shop_id,
+            cash_register_id,
+            customer_id,
+            date,
+            reference,  # Set reference from missing "Referens" row or empty string
+            receipt_id,
+            seller_id,
         ]
+        file_data[matching_file].append(mapped_row_01)
 
-        file_data[matching_file].append(mapped_row_02)
+        # Create "02" rows only for rows where article_id is present
+        for _, row in group.iterrows():
+            article_id = row["Referens"]
+            if pd.isna(article_id) or article_id == "":
+                # Skip this row if article_id is missing
+                continue
+
+            # Create "02" row for valid article_id
+            mapped_row_02 = [
+                "02",
+                row["Benämning"],
+                article_id,
+                row["Ant."],
+                row["Pris "],
+                row["EnhetsprisExMoms"],
+                row["Total moms"],
+                row["Rabatt"],
+            ]
+            file_data[matching_file].append(mapped_row_02)
 
     # Write each set of rows to its corresponding file
     for target_file, rows in file_data.items():
@@ -182,50 +186,39 @@ def data_01_02(följesedlar_data, file_list):
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
 
+def data_03(försäljning_data, file_list):
 
-def data_03_04(betalsätt_data, file_list):
-
-    file_data = {}
-    current_number = None
-    last_number = None  # Track the last Radnummer for conditions
-    betalmedel_sums = {}  # Dictionary to store sums for each betalmedel
-    processed_betalmedel_for_number = {}
-
-    for _, row in betalsätt_data.iterrows():
-
-        serie = row["Serie"]
-        number = row["Nummer"]
-        dokumenttyp = row["Dokumenttyp"]
-
+    for _, row in försäljning_data.iterrows():
+        # Mapped values for 03
         # 03 Mapped values
         butiks_nr = row["KassaId"]
         kassa_nr = row["KassaId"]
         datum = row["Dok.datum"]
 
+    mapped_row_03 = ["03", butiks_nr, kassa_nr, datum]
+
+    for target_file in file_list:
+        # Append the header row to each file
+        with open(target_file, "a") as f:
+            quoted_row = [f'"{value}"' for value in mapped_row_03]
+            f.write(",".join(quoted_row) + "\n")
+
+def data_04(betalsätt_data, file_list):
+    file_data = {}  # To store rows for each matching file
+    betalmedel_sums = {}  # Store sums for each matching file and betalmedel
+    processed_betalmedel_for_number = {}  # Track processed betalmedel per file and number
+
+    for _, row in betalsätt_data.iterrows():
+        serie = row["Serie"]
+        number = row["Nummer"]
+        dokumenttyp = row["Dokumenttyp"]
+
         # 04 Mapped values
         konto = row["Dok.Id"]
         betalmedel = row["Betalmedel"]
-        debetbelopp = float(str(row["Belopp"]).replace(".", "").replace(",", ".")) # TODO Denna räknar inte helt rätt, t.ex. kort visar 1100 istället för 110 och swish är ca 150 fel
+        belopp_value = str(row["Belopp"]).replace(".", "")
+        debetbelopp = float(belopp_value.replace(",", "."))
         kreditbelopp = float(str(row["Belopp"]).replace(",", "."))
-
-        # Initialize tracking for the current `number` if not done yet
-        if number not in processed_betalmedel_for_number:
-            processed_betalmedel_for_number[number] = set()
-
-        # Handle sums based on the row's document type and Radnummer change
-        if betalmedel not in processed_betalmedel_for_number[number]:
-            # Only sum when the betalmedel is unique for this number
-            if dokumenttyp == "Sale receipt":
-                if betalmedel not in betalmedel_sums:
-                    betalmedel_sums[betalmedel] = {"debet": 0, "kredit": 0}
-                betalmedel_sums[betalmedel]["debet"] += debetbelopp
-            elif dokumenttyp == "Sale receipt return":
-                if betalmedel not in betalmedel_sums:
-                    betalmedel_sums[betalmedel] = {"debet": 0, "kredit": 0}
-                betalmedel_sums[betalmedel]["kredit"] += abs(kreditbelopp)
-
-            # Mark this betalmedel as processed for the current number
-            processed_betalmedel_for_number[number].add(betalmedel)
 
         # Find the matching file in file_list
         target_file = map_serie_to_file_name(serie)
@@ -240,20 +233,34 @@ def data_03_04(betalsätt_data, file_list):
 
         if matching_file not in file_data:
             file_data[matching_file] = []
+            betalmedel_sums[matching_file] = {}
+            processed_betalmedel_for_number[matching_file] = {}
 
-    # Only add a new "03" row if the "Nummer" changes
-    if current_number == None:
-        mapped_row_03 = ["03", butiks_nr, kassa_nr, datum]
-        file_data[matching_file].append(mapped_row_03)
-        current_number = number  # Update the current "Nummer"
+        if number not in processed_betalmedel_for_number[matching_file]:
+            processed_betalmedel_for_number[matching_file][number] = set()
 
-    # # Add the "04" rows based on stored sums
-    for betalmedel, sums in betalmedel_sums.items():
-        konto = row["Bokföringssuffix"]
-        debetbelopp = sums["debet"] # Kolla över denna den räknar inte rätt
-        kreditbelopp = sums["kredit"]
-        mapped_row_04 = ["04", konto, betalmedel, str(debetbelopp), str(kreditbelopp)]
-        file_data[matching_file].append(mapped_row_04)
+        # Handle sums based on the row's document type
+        if betalmedel not in processed_betalmedel_for_number[matching_file][number]:
+            if dokumenttyp == "Sale receipt":
+                if betalmedel not in betalmedel_sums[matching_file]:
+                    betalmedel_sums[matching_file][betalmedel] = {"debet": 0, "kredit": 0}
+                betalmedel_sums[matching_file][betalmedel]["debet"] += debetbelopp
+            elif dokumenttyp == "Sale receipt return":
+                if betalmedel not in betalmedel_sums[matching_file]:
+                    betalmedel_sums[matching_file][betalmedel] = {"debet": 0, "kredit": 0}
+                betalmedel_sums[matching_file][betalmedel]["kredit"] += abs(kreditbelopp)
+
+            # Mark this betalmedel as processed for the current number
+            processed_betalmedel_for_number[matching_file][number].add(betalmedel)
+
+    # Add the "04" rows based on stored sums for each matching file
+    for matching_file, sums_per_file in betalmedel_sums.items():
+        for betalmedel, sums in sums_per_file.items():
+            konto = row["Bokföringssuffix"]  # This assumes "Bokföringssuffix" is the same for all rows
+            debetbelopp = int(sums["debet"] * 100)
+            kreditbelopp = int(sums["kredit"] * 100)
+            mapped_row_04 = ["04", konto, betalmedel, str(debetbelopp), str(kreditbelopp)]
+            file_data[matching_file].append(mapped_row_04)
 
     # Write each set of rows to its corresponding file
     for target_file, rows in file_data.items():
@@ -262,7 +269,6 @@ def data_03_04(betalsätt_data, file_list):
                 # Add quotes around each value
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
-
 
 def data_05(försäljning_data, file_list):
 
@@ -281,26 +287,19 @@ def data_05(försäljning_data, file_list):
             quoted_row = [f'"{value}"' for value in mapped_row_05]
             f.write(",".join(quoted_row) + "\n")
 
-
+#TODO kolla så att alla värden ser rätt ut jämfört med 001 filen. T.ex 12% = 1200 istället(just denna är fixad)
 def data_06(försäljning_data, file_list):
-
-    file_data = {}
+    file_data = {}  # Dictionary to store rows per matching file
 
     for _, row in försäljning_data.iterrows():
-
         # Mapped values
         serie = row["Serie"]
-
-        # Mapped values for odd rows
         artikelNr = row["Referens"]
         antal = row["Enh.1"]
-        pris = row["Pris "]
-        tid = row["Timme"]  # TODO Fel format, får 08:39:34 vill ha 0839(inga tecken, inga sekunder)
-        säljare = row[
-            "Anställd"
-        ]
-        moms = row["Moms"] # TODO Pappa tar bort den felaktiga momsen så att den riktiga(momssatsen) används istället
-
+        pris = row["Pris "]  # Price is correct as-is
+        tid = format_time(row["Timme"])  # Keep format_time function for formatting
+        säljare = row["Anställd"]
+        moms = row["Moms"].replace("%", "00")  # This is correct as-is
         doktyp = row["Dokumenttyp"]
 
         # Find the matching file in file_list
@@ -315,13 +314,13 @@ def data_06(försäljning_data, file_list):
             continue
 
         if matching_file not in file_data:
-            file_data[matching_file] = []
+            file_data[matching_file] = []  # Create an entry for this file
 
+        # Negate the quantity for "Sale receipt return"
         if doktyp == "Sale receipt return":
-            # Create the custom mapping for all rows
-            antal = -antal  # Negate the quantity for return rows
+            antal = -antal
 
-        # Create the custom mapping for all rows
+        # Add the row to the corresponding file's data
         mapped_row_06 = ["06", artikelNr, antal, pris, tid, säljare, moms]
         file_data[matching_file].append(mapped_row_06)
 
@@ -332,7 +331,6 @@ def data_06(försäljning_data, file_list):
                 # Add quotes around each value
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
-
 
 def data_07(försäljning_data, file_list):
 
@@ -352,20 +350,17 @@ def data_07(försäljning_data, file_list):
 
 
 def data_08(försäljning_data, file_list):
-
     file_data = {}
 
-    # Dictionary to store the aggregated data for varugrupp
+    # Dictionary to store varugrupp data per file
     varugrupp_data = {}
 
     for _, row in försäljning_data.iterrows():
-        # Mapped values
         serie = row["Serie"]
-        antal = row["Enh.1"]
-        pris = row["Pris "]
-        moms = row["Moms"] # TODO Pappa tar bort den felaktiga momsen så att den riktiga(momssatsen) används istället, måste även ta bort summeringen
-        varugrupp = row["Varugruppskod"] # TODO Pappa lägger till en varugruppskod på artiklarna
-
+        antal = int(row["Enh.1"])  # Convert Enh.1 to integer
+        pris = float(row["Netto"].replace(".", ""))  # Handle formatting for Netto
+        moms = row["Moms"]
+        varugrupp = row["Varugruppskod"]
         doktyp = row["Dokumenttyp"]
 
         # Find the matching file in file_list
@@ -382,39 +377,38 @@ def data_08(försäljning_data, file_list):
         if matching_file not in file_data:
             file_data[matching_file] = []
 
-        # If doktyp is "Sale receipt return", negate the quantity and price
+        # Create a separate varugrupp_data dictionary for each matching file
+        if matching_file not in varugrupp_data:
+            varugrupp_data[matching_file] = {}
+
+        # Aggregate data for varugrupp within the matching file
+        if varugrupp not in varugrupp_data[matching_file]:
+            varugrupp_data[matching_file][varugrupp] = {"antal": 0, "total_pris": 0}
+
+        # Negate for "Sale receipt return"
         if doktyp == "Sale receipt return":
-            antal = -antal  # Negate the quantity for return rows
-            pris = -pris  # Negate the price for return rows
+            antal = -antal
+            pris = -pris
 
-        # Aggregate the data for varugrupp
-        if varugrupp not in varugrupp_data:
-            varugrupp_data[varugrupp] = {"antal": 0, "total_pris": 0, "total_moms": 0}
+        # Sum the values for the matching file and varugrupp
+        varugrupp_data[matching_file][varugrupp]["antal"] += antal
+        varugrupp_data[matching_file][varugrupp]["total_pris"] += pris
 
-        moms = moms.replace(",", ".")  # Replace comma with dot
-
-        varugrupp_data[varugrupp]["antal"] += int(antal)
-        varugrupp_data[varugrupp]["total_pris"] += float(pris)
-        varugrupp_data[varugrupp]["total_moms"] += float(moms)
-
-    # Now, map the aggregated data into rows for the file
+    # Map aggregated data into rows for the file
     for target_file, rows in file_data.items():
-        for varugrupp, data in varugrupp_data.items():
-            data["total_moms"] = str(data["total_moms"]).replace(".", ",")
-
+        for varugrupp, data in varugrupp_data[target_file].items():
             mapped_row_08 = [
                 "08",
                 varugrupp,
-                data["antal"],
-                data["total_pris"],
-                data["total_moms"],
+                data["antal"],  # Total quantity
+                data["total_pris"],  # Total price
+                moms,  # Format moms with commas
             ]
             rows.append(mapped_row_08)
 
         # Write the aggregated rows to the corresponding file
         with open(target_file, "a") as f:
             for row in rows:
-                # Add quotes around each value
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
 
@@ -438,18 +432,13 @@ def data_09(försäljning_data, file_list):
 
 def data_10(försäljning_data, file_list):
     file_data = {}
-
-    # Dictionary to store the aggregated data for each time interval
-    time_interval_data = {}
+    time_interval_data = {}  # Dictionary to store data for each file
 
     for _, row in försäljning_data.iterrows():
-        # Mapped values
         serie = row["Serie"]
-        antal = row["KassaId"]  # TODO Antal ska vara antal kunder dvs antal unika nummer på kvittona per tid(86, 87, 88)
-        pris = row["Netto"] # TODO Uträkningen är helt fel
-        tid = row["Timme"]  # Time value in "HH:mm" format
-
-        doktyp = row["Dokumenttyp"]
+        antal = int(row["Enh.1"])  # Amount (Enh.1)
+        pris = float(row["Netto"].replace(".", ""))  # Convert Netto to float and handle formatting
+        tid = row["Timme"]  # Time in "HH:mm:ss"
 
         # Find the matching file in file_list
         target_file = map_serie_to_file_name(serie)
@@ -457,58 +446,44 @@ def data_10(försäljning_data, file_list):
         matching_file = next((f for f in file_list if target_file_partial in f), None)
 
         if not matching_file:
-            print(
-                f"Warning: Target file {target_file_partial} not found in file_list. Skipping row."
-            )
             continue
 
         if matching_file not in file_data:
             file_data[matching_file] = []
 
-        # If doktyp is "Sale receipt return", negate the quantity and price
-        if doktyp == "Sale receipt return":
-            antal = -antal  # Negate the quantity for return rows
-            pris = -pris  # Negate the price for return rows
+        # Create a separate time_interval_data dictionary for each matching file
+        if matching_file not in time_interval_data:
+            time_interval_data[matching_file] = {}
 
-        # Convert the time (tid) to the interval format
-        time_parts = tid.split(":")
-        hour = int(time_parts[0])
-
-        # Any time between "x.00" and "x.59" belongs to the interval "x.00 - x+1.00"
+        # Convert time to interval format
+        hour, minute, _ = tid.split(":")
+        hour = int(hour)
         start_time = f"{hour}.00"
-        end_time = (
-            f"{hour + 1}.00" if hour + 1 < 24 else "0.00"
-        )  # Wrap around to "0.00" at midnight
-
+        end_time = f"{hour + 1}.00" if hour + 1 < 24 else "0.00"
         time_interval = f"{start_time} - {end_time}"
 
-        # Aggregate the data for each time interval
-        # TODO Check how many times this happens, am I resetting to often?
-        if time_interval not in time_interval_data:
-            time_interval_data[time_interval] = {"antal": 0, "total_pris": 0}
+        # Add to the appropriate file's time interval data
+        if time_interval not in time_interval_data[matching_file]:
+            time_interval_data[matching_file][time_interval] = {"antal": 0, "total_pris": 0}
 
-        time_interval_data[time_interval]["antal"] += antal
-        time_interval_data[time_interval][
-            "total_pris"
-        ] += pris  # Total price per interval
+        # Sum amounts and prices for the time interval
+        time_interval_data[matching_file][time_interval]["antal"] += antal
+        time_interval_data[matching_file][time_interval]["total_pris"] += pris
 
-    # Now, map the aggregated data into rows for the file
-    for target_file, rows in file_data.items():
-        for time_interval, data in time_interval_data.items():
+    # Map aggregated data to rows for each file
+    for target_file, time_data in time_interval_data.items():
+        for time_interval, data in time_data.items():
             mapped_row_10 = [
-                "10",  # Identifier for 10 type
-                time_interval,  # Time interval
-                data["antal"],  # Total quantity for the interval
+                "10",
+                time_interval,
+                data["antal"],  # Total amount for the interval
                 data["total_pris"],  # Total price for the interval
             ]
+            file_data[target_file].append(mapped_row_10)
 
-            # Append the row to the list
-            rows.append(mapped_row_10)
-
-        # Write the aggregated rows to the corresponding file
+        # Write to the corresponding file
         with open(target_file, "a") as f:
-            for row in rows:
-                # Add quotes around each value
+            for row in file_data[target_file]:
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
 
@@ -544,19 +519,16 @@ def data_11(försäljning_data, file_list):
             quoted_row = [f'"{value}"' for value in mapped_row_11]
             f.write(",".join(quoted_row) + "\n")
 
-# TODO Only the last 12 row is appended
+# TODO Se till att pappa lägger till Serie i Moms filen, och gör det först i ordningen. Kolla också att att värdena är i rätt format
 def data_12(moms_data, file_list):
-
-    file_data = {}
+    file_data = {}  # Dictionary to store rows for each matching file
 
     for _, row in moms_data.iterrows():
         # Mapped values
         serie = row["Serie"]
-
-        # Mapped values for 11
         moms = row["Moms"]
         basbelopp = row["Basbelopp"]
-        moms_2 = row.iloc[4]
+        moms_2 = row.iloc[5]  # You use the 5th column (adjust if needed)
         total_belopp = row["Totalbelopp"]
 
         # Find the matching file in file_list
@@ -564,14 +536,25 @@ def data_12(moms_data, file_list):
         target_file_partial = f"{target_file}"
         matching_file = next((f for f in file_list if target_file_partial in f), None)
 
+        if not matching_file:
+            print(f"Warning: Target file {target_file_partial} not found in file_list. Skipping row.")
+            continue
+
+        # Initialize the list for this matching file if not already present
+        if matching_file not in file_data:
+            file_data[matching_file] = []
+
+        # Add the row to the corresponding matching file
         mapped_row_12 = ["12", moms, basbelopp, moms_2, total_belopp]
         file_data[matching_file].append(mapped_row_12)
 
-    for target_file in file_list:
-        # Append the header row to each file
+    # Write each set of rows to its corresponding file
+    for target_file, rows in file_data.items():
         with open(target_file, "a") as f:
-            quoted_row = [f'"{value}"' for value in mapped_row_12]
-            f.write(",".join(quoted_row) + "\n")
+            for row in rows:
+                # Add quotes around each value
+                quoted_row = [f'"{value}"' for value in row]
+                f.write(",".join(quoted_row) + "\n")
 
 
 def data_99(file_list):
@@ -582,3 +565,7 @@ def data_99(file_list):
         with open(target_file, "a") as f:
             quoted_row = [f'"{value}"' for value in footer_row]
             f.write(",".join(quoted_row) + "\n")
+
+def format_time(tid):
+        hour, minute, _ = tid.split(":")
+        return f"{hour}{minute}"
