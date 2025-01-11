@@ -36,6 +36,7 @@ def move_files_to_old_folder(file_paths, folder_to_watch):
 
 import traceback
 
+
 def custom_export_action(file_paths, folder_to_watch):
     """Wrap export_action in try-except with logging/messaging."""
     try:
@@ -46,7 +47,6 @@ def custom_export_action(file_paths, folder_to_watch):
         # Capture the full traceback
         tb = traceback.format_exc()
         print(f"An error occurred during export_action:\n{tb}")
-
 
 
 def custom_import_action(file_path, folder_to_watch):
@@ -76,6 +76,7 @@ class FileRenameHandler(FileSystemEventHandler):
     def _all_export_files_present(self):
         """Check if all export required files exist."""
         current_files = set(os.listdir(self.folder_to_watch))
+        print(f"Current files in folder: {current_files}")
         return all(req_file in current_files for req_file in self.export_required_files)
 
     def _is_import_file_present(self):
@@ -145,6 +146,7 @@ if __name__ == "__main__":
         "Betalsätt.csv",
         "Följesedlar.csv",
         "Moms.csv",
+        "Presentkort.csv",
     ]
     import_required_file = "PCS.ADM"
 
