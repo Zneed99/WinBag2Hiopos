@@ -229,7 +229,7 @@ def data_04(betalsätt_data, file_list):
     for _, row in betalsätt_data.iterrows():
         serie = row["Serie"]
         number = row["Nummer"]
-        dokumenttyp = row["Dokumenttyp"]
+        kod_dokumenttyp = row["Kod för dokumenttyp"]
 
         # 04 Mapped values
         konto = row["Dok.Id"]
@@ -265,14 +265,14 @@ def data_04(betalsätt_data, file_list):
 
         # Handle sums based on the row's document type
         if betalmedel not in processed_betalmedel_for_number[matching_file][number]:
-            if dokumenttyp == "Sale receipt":
+            if kod_dokumenttyp == 1:
                 if betalmedel not in betalmedel_sums[matching_file]:
                     betalmedel_sums[matching_file][betalmedel] = {
                         "debet": 0,
                         "kredit": 0,
                     }
                 betalmedel_sums[matching_file][betalmedel]["debet"] += debetbelopp
-            elif dokumenttyp == "Sale receipt return":
+            elif kod_dokumenttyp == 3:
                 if betalmedel not in betalmedel_sums[matching_file]:
                     betalmedel_sums[matching_file][betalmedel] = {
                         "debet": 0,
@@ -479,8 +479,8 @@ def data_06(försäljning_data, file_list):
         pris = row["Pris "]  # Price is correct as-is
         tid = format_time(row["Timme"])  # Keep format_time function for formatting
         säljare = row["Anställd"]
-        moms = row["Moms"].replace("%", "00")  # This is correct as-is
-        doktyp = row["Dokumenttyp"]
+        moms = row["Moms"].replace("%", "00").replace(" ", "")  # This is correct as-is
+        kod_doktyp = row["Kod för dokumenttyp"]
 
         # Find the matching file in file_list
         target_file = map_serie_to_file_name(serie)
@@ -497,7 +497,7 @@ def data_06(försäljning_data, file_list):
             file_data[matching_file] = []  # Create an entry for this file
 
         # Negate the quantity for "Sale receipt return"
-        if doktyp == "Sale receipt return":
+        if kod_doktyp == 3:
             antal = -antal
 
         # Add the row to the corresponding file's data
@@ -539,10 +539,10 @@ def data_08(försäljning_data, file_list):
     for _, row in försäljning_data.iterrows():
         serie = row["Serie"]
         antal = int(row["Enh.1"])  # Convert Enh.1 to integer
-        pris = float(row["Netto"].replace(".", ""))  # Handle formatting for Netto
+        pris = float(row["Netto"].replace(".", "").replace(",", "."))  # Handle formatting for Netto
         moms = row["Moms"].replace("%", "00")
         varugrupp = row["Varugruppskod"]
-        doktyp = row["Dokumenttyp"]
+        kod_doktyp = row["Kod för dokumenttyp"]
 
         # Find the matching file in file_list
         target_file = map_serie_to_file_name(serie)
@@ -567,7 +567,7 @@ def data_08(försäljning_data, file_list):
             varugrupp_data[matching_file][varugrupp] = {"antal": 0, "total_pris": 0}
 
         # Negate for "Sale receipt return"
-        if doktyp == "Sale receipt return":
+        if kod_doktyp == 3:
             antal = -antal
             pris = -pris
 
@@ -619,7 +619,7 @@ def data_10(försäljning_data, file_list):
         serie = row["Serie"]
         antal = int(row["Enh.1"])  # Amount (Enh.1)
         pris = float(
-            row["Netto"].replace(".", "")
+            row["Netto"].replace(".", "").replace(",", ".")
         )  # Convert Netto to float and handle formatting
         tid = row["Timme"]  # Time in "HH:mm:ss"
 
@@ -721,7 +721,7 @@ def data_12(moms_data, file_list, serie_butikskod_map):
             continue
 
         # Mapped values
-        moms = row["Moms"].replace("%", "00")
+        moms = row["Moms"].replace("%", "00").replace(" ", "")
         basbelopp = row["Basbelopp"].replace(".", "").replace(",", ".")
         moms_2 = row["Moms_2"].replace(".", "").replace(",", ".")
         total_belopp = row["Totalbelopp"].replace(".", "").replace(",", ".")
