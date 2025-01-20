@@ -154,9 +154,9 @@ def transform_02_22(row):
     name = row[4].strip('"')
     value_1 = row[6].strip('"')
     value_2 = row[7].strip('"')
-    price = row[8].strip('"')
-    moms = row[9].strip('"')
-    price_2 = row[10].strip('"')
+    price = row[8].strip('"').replace("00", "")
+    moms = row[9].strip('"').replace("00", "")
+    price_2 = row[10].strip('"').replace("00", "")
 
     # Build the final string, semicolon-delimited
     return f"{tf_value} ; {code} ; {name} ; {value_1} ; {value_2} ; {price} ; {moms} ; {price_2}"
