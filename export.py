@@ -12,6 +12,7 @@ def export_action(file_paths):
     betalsätt_data = None
     följesedlar_data = None
     presentkort_data = None
+    presentkort_sålda_data = None
     time.sleep(1)
 
     for file_path in file_paths:
@@ -23,11 +24,13 @@ def export_action(file_paths):
         elif "Betalsätt" in file_name:
             betalsätt_data = pd.read_csv(file_path, sep=";")
         elif "Följesedlar" in file_name:
-            följesedlar_data = pd.read_csv(file_path, sep=";", dtype={"Netto": str})
+            följesedlar_data = pd.read_csv(file_path, sep=";", dtype={"Netto": str, "Referens": str})
         elif "Moms" in file_name:
             moms_data = pd.read_csv(file_path, sep=";", dtype={"Totalbelopp": str})
         elif "Presentkort" in file_name:
             presentkort_data = pd.read_csv(file_path, sep=";", dtype={"Belopp": str})
+        elif "Sålda" in file_name:
+            presentkort_sålda_data = pd.read_csv(file_path, sep=";", dtype={"Belopp": str, "Kort": str})
 
     if (
         forsäljning_data is None
@@ -35,6 +38,7 @@ def export_action(file_paths):
         or följesedlar_data is None
         or moms_data is None
         or presentkort_data is None
+        or presentkort_sålda_data is None
     ):
         raise ValueError("One or more required files are missing from the file paths.")
 
@@ -50,7 +54,7 @@ def export_action(file_paths):
     data_00(file_list)
     data_01_02(följesedlar_data, file_list)
     data_03(forsäljning_data, file_list)
-    data_04(betalsätt_data, file_list)
+    data_04(betalsätt_data, file_list, presentkort_sålda_data)
     data_04_följesedlar(följesedlar_data, file_list)
     data_04_presentkort(presentkort_data, file_list, butikskod_serie_map)
     data_05(forsäljning_data, file_list)
@@ -185,8 +189,8 @@ def data_01_02(följesedlar_data, file_list):
                 article_id,
                 row["Ant."],
                 row["Pris "],
-                row["EnhetsprisExMoms"],
-                row["Total moms"],
+                format_value_as_integer_string(row["EnhetsprisExMoms"]),
+                format_value_as_integer_string(row["Total moms"]),
                 row["Rabatt"],
             ]
             file_data[matching_file].append(mapped_row_02)
@@ -218,13 +222,25 @@ def data_03(försäljning_data, file_list):
             f.write(",".join(quoted_row) + "\n")
 
 
-def data_04(betalsätt_data, file_list):
+def data_04(betalsätt_data, file_list, presentkort_sålda):
     file_data = {}  # To store rows for each matching file
     betalmedel_sums = {}  # Store sums for each matching file and betalmedel
     processed_betalmedel_for_number = (
         {}
     )  # Track processed betalmedel per file and number
     suffix_mapping = {}  # Store the Bokföringssuffix for each betalmedel per file
+
+    # Preprocess presentkort_sålda for easy lookup
+    presentkort_sålda_data = {}
+    for _, row in presentkort_sålda.iterrows():
+        kort = str(row["Kort"])
+        betalmedel = row["Betalmedel"]
+        belopp = float(str(row["Belopp"]).replace(".", "").replace(",", "."))
+
+        if kort != "nan":
+            if betalmedel not in presentkort_sålda_data:
+                presentkort_sålda_data[betalmedel] = 0
+            presentkort_sålda_data[betalmedel] += belopp
 
     for _, row in betalsätt_data.iterrows():
         serie = row["Serie"]
@@ -263,6 +279,14 @@ def data_04(betalsätt_data, file_list):
         if betalmedel not in suffix_mapping[matching_file]:
             suffix_mapping[matching_file][betalmedel] = bokföringssuffix
 
+        # Add presentkort_sålda belopp to the betalmedel as debet
+        # Add presentkort_sålda belopp to the betalmedel as debet
+        if betalmedel in presentkort_sålda_data:
+            if betalmedel not in betalmedel_sums[matching_file]:
+                betalmedel_sums[matching_file][betalmedel] = {"debet": 0, "kredit": 0}
+
+                betalmedel_sums[matching_file][betalmedel]["debet"] += presentkort_sålda_data[betalmedel]
+
         # Handle sums based on the row's document type
         if betalmedel not in processed_betalmedel_for_number[matching_file][number]:
             if kod_dokumenttyp == 1:
@@ -271,7 +295,9 @@ def data_04(betalsätt_data, file_list):
                         "debet": 0,
                         "kredit": 0,
                     }
+
                 betalmedel_sums[matching_file][betalmedel]["debet"] += debetbelopp
+
             elif kod_dokumenttyp == 3:
                 if betalmedel not in betalmedel_sums[matching_file]:
                     betalmedel_sums[matching_file][betalmedel] = {
@@ -289,8 +315,8 @@ def data_04(betalsätt_data, file_list):
     for matching_file, sums_per_file in betalmedel_sums.items():
         for betalmedel, sums in sums_per_file.items():
             konto = suffix_mapping[matching_file][betalmedel]
-            debetbelopp = int(sums["debet"] * 100)
-            kreditbelopp = int(sums["kredit"] * 100)
+            debetbelopp = format_value_as_integer_string(sums["debet"])
+            kreditbelopp = format_value_as_integer_string(sums["kredit"])
             mapped_row_04 = [
                 "04",
                 konto,
@@ -307,6 +333,8 @@ def data_04(betalsätt_data, file_list):
                 # Add quotes around each value
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
+
+
 
 
 def data_04_följesedlar(följesedlar_data, file_list):
@@ -361,8 +389,8 @@ def data_04_följesedlar(följesedlar_data, file_list):
         if konto is None:
             print(f"Warning: No Bokföringssuffix found for file {matching_file}")
             continue
-        debetbelopp = int(sums["debet"] * 100)
-        kreditbelopp = int(sums["kredit"] * 100)
+        debetbelopp = format_value_as_integer_string(sums["debet"])
+        kreditbelopp = format_value_as_integer_string(sums["kredit"])
         mapped_row_04 = [
             "04",
             konto,
@@ -429,8 +457,8 @@ def data_04_presentkort(presentkort_data, file_list, serie_butikskod_map):
         if konto is None:
             print(f"Warning: No Presentkortskonto found for file {matching_file}")
             continue
-        positive_value = int(sums["positive"] * 100)
-        negative_value = int(sums["negative"] * 100)
+        positive_value = format_value_as_integer_string(sums["positive"])
+        negative_value = format_value_as_integer_string(sums["negative"])
         mapped_row_04 = [
             "04",
             konto,
@@ -501,7 +529,7 @@ def data_06(försäljning_data, file_list):
             antal = -antal
 
         # Add the row to the corresponding file's data
-        mapped_row_06 = ["06", artikelNr, antal, pris, tid, säljare, moms]
+        mapped_row_06 = ["06", artikelNr, antal, format_value_as_integer_string(pris), tid, säljare, moms]
         file_data[matching_file].append(mapped_row_06)
 
     # Write each set of rows to its corresponding file
@@ -582,7 +610,7 @@ def data_08(försäljning_data, file_list):
                 "08",
                 varugrupp,
                 data["antal"],  # Total quantity
-                data["total_pris"],  # Total price
+                format_value_as_integer_string(data["total_pris"]),  # Total price
                 moms,  # Format moms with commas
             ]
             rows.append(mapped_row_08)
@@ -663,7 +691,7 @@ def data_10(försäljning_data, file_list):
                 "10",
                 time_interval,
                 data["antal"],  # Total amount for the interval
-                data["total_pris"],  # Total price for the interval
+                format_value_as_integer_string(data["total_pris"]),  # Total price for the interval
             ]
             file_data[target_file].append(mapped_row_10)
 
@@ -740,8 +768,6 @@ def data_12(moms_data, file_list, serie_butikskod_map):
         # Initialize the list for this matching file if not already present
         if matching_file not in file_data:
             file_data[matching_file] = []
-
-        print(f"Basbelopp: {basbelopp}, Moms_2: {moms_2}, Totalbelopp: {total_belopp}")
 
         basbelopp = format_value_as_integer_string(basbelopp)
         moms_2 = format_value_as_integer_string(moms_2)

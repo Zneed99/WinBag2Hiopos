@@ -147,6 +147,7 @@ if __name__ == "__main__":
         "Följesedlar.csv",
         "Moms.csv",
         "Presentkort.csv",
+        "Sålda.csv",
     ]
     import_required_file = "PCS.ADM"
 
