@@ -117,7 +117,7 @@ def transform_01_11(row):
     # print(f"First value: {row[0]}")
 
     # Determine T or F
-    tf_value = "F" if row[0].strip('"') == "01" else "T"
+    tf_value = "False" if row[0].strip('"') == "01" else "True"
 
     # Extract columns (strip() to remove accidental whitespace)
     code = row[3].strip('"')
@@ -147,7 +147,7 @@ def transform_02_22(row):
         return ""  # or raise an error/log it
 
     # Determine T or F
-    tf_value = "F" if row[0].strip('"') == "02" else "T"
+    tf_value = "False" if row[0].strip('"') == "02" else "True"
 
     # Extract columns (strip() to remove accidental whitespace)
     code = row[3].strip('"')
@@ -172,7 +172,7 @@ def transform_huvudgrupp(row):
         return ""
 
     # Determine T or F
-    tf_value = "F" if row[0].strip('"') == "03" else "T"
+    tf_value = "False" if row[0].strip('"') == "03" else "True"
 
     # Extract columns (strip() to remove accidental whitespace)
     huvudgrupp_code = row[4].strip('"')
@@ -190,7 +190,7 @@ def transform_varugrupp(row):
         return ""
 
     # Determine T or F
-    tf_value = "F" if row[0].strip('"') == "03" else "T"
+    tf_value = "False" if row[0].strip('"') == "03" else "True"
 
     # Extract columns (strip() to remove accidental whitespace)
     huvudgrupp_code = row[4].strip('"')
