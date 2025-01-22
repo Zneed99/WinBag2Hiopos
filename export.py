@@ -50,24 +50,26 @@ def export_action(file_paths):
     base_dir = os.path.dirname(file_path)
     export_folder = os.path.join(base_dir, "Exported Files")
 
-    file_list = create_resulting_files(forsäljning_data, export_folder)
-
     butikskod_serie_map = create_butikskod_serie_map(forsäljning_data)
+
+    file_list = create_resulting_files(forsäljning_data, export_folder, butikskod_serie_map)
+
+
     print(f"Serie to butikskod map: {butikskod_serie_map}")
 
     data_00(file_list)
-    data_01_02(följesedlar_data, file_list)
+    data_01_02(följesedlar_data, file_list, butikskod_serie_map)
     data_03(forsäljning_data, file_list)
-    data_04(betalsätt_data, file_list, presentkort_sålda_data)
-    data_04_följesedlar(följesedlar_data, file_list)
+    data_04(betalsätt_data, file_list, presentkort_sålda_data, butikskod_serie_map)
+    data_04_följesedlar(följesedlar_data, file_list, butikskod_serie_map)
     data_04_presentkort(presentkort_data, file_list, butikskod_serie_map)
     data_05(forsäljning_data, file_list)
-    data_06(forsäljning_data, file_list)
+    data_06(forsäljning_data, file_list, butikskod_serie_map)
     data_07(forsäljning_data, file_list)
-    data_08(forsäljning_data, file_list)
+    data_08(forsäljning_data, file_list, butikskod_serie_map)
     data_09(forsäljning_data, file_list)
-    data_10(forsäljning_data, file_list)
-    data_11(forsäljning_data, file_list)
+    data_10(forsäljning_data, file_list, butikskod_serie_map)
+    data_11(forsäljning_data, file_list, butikskod_serie_map)
     data_12(moms_data, file_list, butikskod_serie_map)
 
     data_99(file_list)
@@ -77,7 +79,7 @@ def export_action(file_paths):
     # Add further export functionality here
 
 
-def create_resulting_files(forsäljning_data, target_folder):
+def create_resulting_files(forsäljning_data, target_folder, butikskod_serie_map):
     created_files = []
 
     # Ensure the target folder exists
@@ -86,16 +88,12 @@ def create_resulting_files(forsäljning_data, target_folder):
 
     # Get the current timestamp in Stockholm timezone
     stockholm_tz = pytz.timezone("Europe/Stockholm")
-    timestamp = datetime.now(stockholm_tz).strftime("%Y%m%d-%H-%M-%S")
+    timestamp = datetime.now(stockholm_tz).strftime("%y%m%d_%H%M")
 
-    # Extract unique values from the "Serie" column
-    unique_series = forsäljning_data["Serie"].unique()
-
-    print(f"Unique series: {unique_series}")
-
-    for serie in unique_series:
-        # Create an empty file for this series in the target folder
-        file_name = f"{serie}_{timestamp}.csv"
+    # Iterate over the butikskod_serie_map to create files based on Butikskod
+    for butikskod, serie in butikskod_serie_map.items():
+        # Create a file name using Butikskod instead of Serie
+        file_name = f"0{butikskod}_000_{timestamp}.TXT"
         file_path = os.path.join(target_folder, file_name)
 
         # Write an empty file with no data, only an optional placeholder header
@@ -107,9 +105,25 @@ def create_resulting_files(forsäljning_data, target_folder):
     return created_files
 
 
-def map_serie_to_file_name(serie_value):
-    """Map the 'Serie' value to a file name(ignoring the first two characters)"""
-    return f"T0{serie_value[2:]}"
+def map_serie_to_file_name(serie_value, butikskod_serie_map):
+    """
+    Map the 'Serie' value to its corresponding 'Butikskod' key based on the map.
+    """
+
+    # If the serie_value starts with "AV", replace it with "TH"
+    if serie_value.startswith("AV"):
+        serie_value = f"T0{serie_value[2:]}"
+
+    # Reverse lookup: find the key where the value matches the serie_value
+    butikskod_value = next(
+        (key for key, value in butikskod_serie_map.items() if value == serie_value),
+        None,
+    )
+
+    print(f"Butikskod value: {butikskod_value}")
+
+    return f"{butikskod_value}"
+
 
 
 def data_00(file_list):
@@ -122,7 +136,7 @@ def data_00(file_list):
             f.write(",".join(quoted_row) + "\n")
 
 
-def data_01_02(följesedlar_data, file_list):
+def data_01_02(följesedlar_data, file_list, butikskod_serie_map):
     file_data = {}
     current_number = None
 
@@ -149,12 +163,13 @@ def data_01_02(följesedlar_data, file_list):
         cash_register_id = first_row["KassaId"]
         customer_id = first_row["Kundkod"]
         date = first_row["Dok.datum"]
+        date = datetime.strptime(date, "%d/%m/%Y").strftime("%Y-%m-%d")
         receipt_id = first_row["Nummer"]
         seller_id = first_row["Anställd"]
 
         # Find the matching file in file_list
         serie = first_row["Serie"]
-        target_file = map_serie_to_file_name(serie)
+        target_file = map_serie_to_file_name(serie, butikskod_serie_map)
         target_file_partial = f"{target_file}"
         matching_file = next((f for f in file_list if target_file_partial in f), None)
 
@@ -227,7 +242,7 @@ def data_03(försäljning_data, file_list):
             f.write(",".join(quoted_row) + "\n")
 
 
-def data_04(betalsätt_data, file_list, presentkort_sålda):
+def data_04(betalsätt_data, file_list, presentkort_sålda, butikskod_serie_map):
     file_data = {}  # To store rows for each matching file
     betalmedel_sums = {}  # Store sums for each matching file and betalmedel
     processed_betalmedel_for_number = (
@@ -261,7 +276,7 @@ def data_04(betalsätt_data, file_list, presentkort_sålda):
         bokföringssuffix = row["Bokföringssuffix"]
 
         # Find the matching file in file_list
-        target_file = map_serie_to_file_name(serie)
+        target_file = map_serie_to_file_name(serie, butikskod_serie_map)
         target_file_partial = f"{target_file}"
         matching_file = next((f for f in file_list if target_file_partial in f), None)
 
@@ -342,7 +357,7 @@ def data_04(betalsätt_data, file_list, presentkort_sålda):
                 f.write(",".join(quoted_row) + "\n")
 
 
-def data_04_följesedlar(följesedlar_data, file_list):
+def data_04_följesedlar(följesedlar_data, file_list, butikskod_serie_map):
     file_data = {}  # To store rows for each matching file
     sums_per_file = {}  # Store sums for each matching file
     processed_numbers_for_file = {}  # Track processed numbers per file
@@ -362,7 +377,7 @@ def data_04_följesedlar(följesedlar_data, file_list):
         kreditbelopp = abs(pris_value) if pris_value < 0 else 0.0
 
         # Find the matching file in file_list
-        target_file = map_serie_to_file_name(serie)
+        target_file = map_serie_to_file_name(serie, butikskod_serie_map)
         target_file_partial = f"{target_file}"
         matching_file = next((f for f in file_list if target_file_partial in f), None)
 
@@ -434,7 +449,7 @@ def data_04_presentkort(presentkort_data, file_list, serie_butikskod_map):
         negative_value = pris_value if typ_av_transaktion == 2 else 0.0
 
         # Find the matching file in file_list
-        target_file = map_serie_to_file_name(serie)
+        target_file = map_serie_to_file_name(serie, serie_butikskod_map)
         target_file_partial = f"{target_file}"
         matching_file = next((f for f in file_list if target_file_partial in f), None)
 
@@ -502,7 +517,7 @@ def data_05(försäljning_data, file_list):
 
 
 # TODO kolla så att alla värden ser rätt ut jämfört med 001 filen. T.ex 12% = 1200 istället(just denna är fixad)
-def data_06(försäljning_data, file_list):
+def data_06(försäljning_data, file_list, butikskod_serie_map):
     file_data = {}  # Dictionary to store rows per matching file
 
     for _, row in försäljning_data.iterrows():
@@ -517,7 +532,7 @@ def data_06(försäljning_data, file_list):
         kod_doktyp = row["Kod för dokumenttyp"]
 
         # Find the matching file in file_list
-        target_file = map_serie_to_file_name(serie)
+        target_file = map_serie_to_file_name(serie, butikskod_serie_map)
         target_file_partial = f"{target_file}"
         matching_file = next((f for f in file_list if target_file_partial in f), None)
 
@@ -573,7 +588,7 @@ def data_07(försäljning_data, file_list):
             f.write(",".join(quoted_row) + "\n")
 
 
-def data_08(försäljning_data, file_list):
+def data_08(försäljning_data, file_list, butikskod_serie_map):
     file_data = {}
 
     # Dictionary to store varugrupp data per file
@@ -590,7 +605,7 @@ def data_08(försäljning_data, file_list):
         kod_doktyp = row["Kod för dokumenttyp"]
 
         # Find the matching file in file_list
-        target_file = map_serie_to_file_name(serie)
+        target_file = map_serie_to_file_name(serie, butikskod_serie_map)
         target_file_partial = f"{target_file}"
         matching_file = next((f for f in file_list if target_file_partial in f), None)
 
@@ -657,7 +672,7 @@ def data_09(försäljning_data, file_list):
             f.write(",".join(quoted_row) + "\n")
 
 
-def data_10(försäljning_data, file_list):
+def data_10(försäljning_data, file_list, butikskod_serie_map):
     file_data = {}
     time_interval_data = {}  # Dictionary to store data for each file
 
@@ -670,7 +685,7 @@ def data_10(försäljning_data, file_list):
         tid = row["Timme"]  # Time in "HH:mm:ss"
 
         # Find the matching file in file_list
-        target_file = map_serie_to_file_name(serie)
+        target_file = map_serie_to_file_name(serie, butikskod_serie_map)
         target_file_partial = f"{target_file}"
         matching_file = next((f for f in file_list if target_file_partial in f), None)
 
@@ -722,7 +737,7 @@ def data_10(försäljning_data, file_list):
                 f.write(",".join(quoted_row) + "\n")
 
 
-def data_11(försäljning_data, file_list):
+def data_11(försäljning_data, file_list, butikskod_serie_map):
 
     file_data = {}
 
@@ -738,7 +753,7 @@ def data_11(försäljning_data, file_list):
         datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
         # Find the matching file in file_list
-        target_file = map_serie_to_file_name(serie)
+        target_file = map_serie_to_file_name(serie, butikskod_serie_map)
         target_file_partial = f"{target_file}"
         matching_file = next((f for f in file_list if target_file_partial in f), None)
 
@@ -776,7 +791,7 @@ def data_12(moms_data, file_list, serie_butikskod_map):
         total_belopp = row["Totalbelopp"].replace(".", "").replace(",", ".")
 
         # Find the matching file in file_list
-        target_file = map_serie_to_file_name(serie)
+        target_file = map_serie_to_file_name(serie, serie_butikskod_map)
         target_file_partial = f"{target_file}"
         matching_file = next((f for f in file_list if target_file_partial in f), None)
 
