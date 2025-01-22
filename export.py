@@ -24,13 +24,17 @@ def export_action(file_paths):
         elif "Betalsätt" in file_name:
             betalsätt_data = pd.read_csv(file_path, sep=";")
         elif "Följesedlar" in file_name:
-            följesedlar_data = pd.read_csv(file_path, sep=";", dtype={"Netto": str, "Referens": str})
+            följesedlar_data = pd.read_csv(
+                file_path, sep=";", dtype={"Netto": str, "Referens": str}
+            )
         elif "Moms" in file_name:
             moms_data = pd.read_csv(file_path, sep=";", dtype={"Totalbelopp": str})
         elif "Presentkort" in file_name:
             presentkort_data = pd.read_csv(file_path, sep=";", dtype={"Belopp": str})
         elif "Sålda" in file_name:
-            presentkort_sålda_data = pd.read_csv(file_path, sep=";", dtype={"Belopp": str, "Kort": str})
+            presentkort_sålda_data = pd.read_csv(
+                file_path, sep=";", dtype={"Belopp": str, "Kort": str}
+            )
 
     if (
         forsäljning_data is None
@@ -211,7 +215,8 @@ def data_03(försäljning_data, file_list):
         # 03 Mapped values
         butiks_nr = row["KassaId"]
         kassa_nr = row["KassaId"]
-        datum = row["Dok.datum"]
+        raw_datum = row["Dok.datum"]
+        datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
     mapped_row_03 = ["03", butiks_nr, kassa_nr, datum]
 
@@ -285,7 +290,9 @@ def data_04(betalsätt_data, file_list, presentkort_sålda):
             if betalmedel not in betalmedel_sums[matching_file]:
                 betalmedel_sums[matching_file][betalmedel] = {"debet": 0, "kredit": 0}
 
-                betalmedel_sums[matching_file][betalmedel]["debet"] += presentkort_sålda_data[betalmedel]
+                betalmedel_sums[matching_file][betalmedel][
+                    "debet"
+                ] += presentkort_sålda_data[betalmedel]
 
         # Handle sums based on the row's document type
         if betalmedel not in processed_betalmedel_for_number[matching_file][number]:
@@ -333,8 +340,6 @@ def data_04(betalsätt_data, file_list, presentkort_sålda):
                 # Add quotes around each value
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
-
-
 
 
 def data_04_följesedlar(följesedlar_data, file_list):
@@ -484,7 +489,8 @@ def data_05(försäljning_data, file_list):
         # 03 Mapped values
         butiks_nr = row["KassaId"]
         kassa_nr = row["KassaId"]
-        datum = row["Dok.datum"]
+        raw_datum = row["Dok.datum"]
+        datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
     mapped_row_05 = ["05", butiks_nr, kassa_nr, datum]
 
@@ -529,7 +535,15 @@ def data_06(försäljning_data, file_list):
             antal = -antal
 
         # Add the row to the corresponding file's data
-        mapped_row_06 = ["06", artikelNr, antal, format_value_as_integer_string(pris), tid, säljare, moms]
+        mapped_row_06 = [
+            "06",
+            artikelNr,
+            antal,
+            format_value_as_integer_string(pris),
+            tid,
+            säljare,
+            moms,
+        ]
         file_data[matching_file].append(mapped_row_06)
 
     # Write each set of rows to its corresponding file
@@ -547,7 +561,8 @@ def data_07(försäljning_data, file_list):
         # Mapped values for 07
         butiks_nr = row["KassaId"]
         kassa_nr = row["KassaId"]
-        datum = row["Dok.datum"]
+        raw_datum = row["Dok.datum"]
+        datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
     mapped_row_07 = ["07", butiks_nr, kassa_nr, datum]
 
@@ -567,7 +582,9 @@ def data_08(försäljning_data, file_list):
     for _, row in försäljning_data.iterrows():
         serie = row["Serie"]
         antal = int(row["Enh.1"])  # Convert Enh.1 to integer
-        pris = float(row["Netto"].replace(".", "").replace(",", "."))  # Handle formatting for Netto
+        pris = float(
+            row["Netto"].replace(".", "").replace(",", ".")
+        )  # Handle formatting for Netto
         moms = row["Moms"].replace("%", "00")
         varugrupp = row["Varugruppskod"]
         kod_doktyp = row["Kod för dokumenttyp"]
@@ -628,7 +645,8 @@ def data_09(försäljning_data, file_list):
         # Mapped values for 09
         butiks_nr = row["KassaId"]
         kassa_nr = row["KassaId"]
-        datum = row["Dok.datum"]
+        raw_datum = row["Dok.datum"]
+        datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
     mapped_row_09 = ["09", butiks_nr, kassa_nr, datum]
 
@@ -691,7 +709,9 @@ def data_10(försäljning_data, file_list):
                 "10",
                 time_interval,
                 data["antal"],  # Total amount for the interval
-                format_value_as_integer_string(data["total_pris"]),  # Total price for the interval
+                format_value_as_integer_string(
+                    data["total_pris"]
+                ),  # Total price for the interval
             ]
             file_data[target_file].append(mapped_row_10)
 
@@ -714,7 +734,8 @@ def data_11(försäljning_data, file_list):
         # Mapped values for 11
         butiks_nr = row["KassaId"]
         kassa_nr = row["KassaId"]
-        datum = row["Dok.datum"]
+        raw_datum = row["Dok.datum"]
+        datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
         # Find the matching file in file_list
         target_file = map_serie_to_file_name(serie)

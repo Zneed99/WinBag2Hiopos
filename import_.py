@@ -152,14 +152,15 @@ def transform_02_22(row):
     # Extract columns (strip() to remove accidental whitespace)
     code = row[3].strip('"')
     name = row[4].strip('"')
+    streckkod = row[5].strip('"')
     value_1 = row[6].strip('"')
     value_2 = row[7].strip('"')
-    price = row[8].strip('"').replace("00", "")
-    moms = row[9].strip('"').replace("00", "")
-    price_2 = row[10].strip('"').replace("00", "")
+    price = row[8].strip('"').replace("00", "").lstrip("0") or "0"
+    moms = row[9].strip('"').replace("00", "").lstrip("0") or "0"
+    price_2 = row[10].strip('"').replace("00", "").lstrip("0") or "0"
 
     # Build the final string, semicolon-delimited
-    return f"{tf_value} ; {code} ; {name} ; {value_1} ; {value_2} ; {price} ; {moms} ; {price_2}"
+    return f"{tf_value} ; {code} ; {name} ; {streckkod} ; {value_1} ; {value_2} ; {price} ; {moms} ; {price_2}"
 
 
 def transform_huvudgrupp(row):
