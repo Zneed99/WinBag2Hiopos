@@ -112,7 +112,9 @@ def map_serie_to_file_name(serie_value, butikskod_serie_map):
 
     # If the serie_value starts with "AV", replace it with "TH"
     if serie_value.startswith("AV"):
-        serie_value = f"T0{serie_value[2:]}"
+        serie_value = f"T1{serie_value[2:]}"
+
+    
 
     # Reverse lookup: find the key where the value matches the serie_value
     butikskod_value = next(
@@ -120,7 +122,7 @@ def map_serie_to_file_name(serie_value, butikskod_serie_map):
         None,
     )
 
-    print(f"Butikskod value: {butikskod_value}")
+    #print(f"Butikskod value: {butikskod_value}")
 
     return f"{butikskod_value}"
 
@@ -204,13 +206,14 @@ def data_01_02(följesedlar_data, file_list, butikskod_serie_map):
             # Create "02" row for valid article_id
             mapped_row_02 = [
                 "02",
-                row["Benämning"],
+                "0", #TODO Check if this should somethign else if its a reference
                 article_id,
                 row["Ant."],
-                row["Pris "],
+                format_value_as_integer_string(row["Pris "]),
                 format_value_as_integer_string(row["EnhetsprisExMoms"]),
-                format_value_as_integer_string(row["Total moms"]),
-                row["Rabatt"],
+                row["Moms"].replace("%", "").replace(" ", ""),
+                row["Rabatt"], #TODO This should be fixed
+                format_value_as_integer_string(row["EnhetsprisExMoms"])
             ]
             file_data[matching_file].append(mapped_row_02)
 
@@ -516,7 +519,6 @@ def data_05(försäljning_data, file_list):
             f.write(",".join(quoted_row) + "\n")
 
 
-# TODO kolla så att alla värden ser rätt ut jämfört med 001 filen. T.ex 12% = 1200 istället(just denna är fixad)
 def data_06(försäljning_data, file_list, butikskod_serie_map):
     file_data = {}  # Dictionary to store rows per matching file
 
@@ -600,7 +602,7 @@ def data_08(försäljning_data, file_list, butikskod_serie_map):
         pris = float(
             row["Netto"].replace(".", "").replace(",", ".")
         )  # Handle formatting for Netto
-        moms = row["Moms"].replace("%", "00")
+        moms = row["Moms"].replace("%", "00").replace(" ", "") 
         varugrupp = row["Varugruppskod"]
         kod_doktyp = row["Kod för dokumenttyp"]
 
@@ -641,7 +643,7 @@ def data_08(försäljning_data, file_list, butikskod_serie_map):
             mapped_row_08 = [
                 "08",
                 varugrupp,
-                data["antal"],  # Total quantity
+                format_value_as_integer_string(data["antal"]),  # Total quantity
                 format_value_as_integer_string(data["total_pris"]),  # Total price
                 moms,  # Format moms with commas
             ]
@@ -723,7 +725,7 @@ def data_10(försäljning_data, file_list, butikskod_serie_map):
             mapped_row_10 = [
                 "10",
                 time_interval,
-                data["antal"],  # Total amount for the interval
+                format_value_as_integer_string(data["antal"]),  # This one should be 2 decimals
                 format_value_as_integer_string(
                     data["total_pris"]
                 ),  # Total price for the interval
