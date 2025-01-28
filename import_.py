@@ -160,7 +160,7 @@ def transform_02_22(row):
     price_2 = row[10].strip('"').replace("00", "").lstrip("0") or "0"
 
     # Build the final string, semicolon-delimited
-    return f"{tf_value} ; {code} ; {name} ; {streckkod} ; {value_1} ; {value_2} ; {price} ; {moms} ; {price_2}"
+    return f"{code} ; {name} ; {value_1} ; {value_2} ; {price} ; {tf_value}"
 
 
 def transform_huvudgrupp(row):
