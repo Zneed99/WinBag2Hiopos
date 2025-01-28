@@ -29,9 +29,9 @@ def export_action(file_paths):
             )
         elif "Moms" in file_name:
             moms_data = pd.read_csv(file_path, sep=";", dtype={"Totalbelopp": str})
-        elif "Presentkort" in file_name:
+        elif "Presentkort_used" in file_name:
             presentkort_data = pd.read_csv(file_path, sep=";", dtype={"Belopp": str})
-        elif "Sålda" in file_name:
+        elif "Presentkort_sold" in file_name:
             presentkort_sålda_data = pd.read_csv(
                 file_path, sep=";", dtype={"Belopp": str, "Kort": str}
             )
@@ -42,9 +42,12 @@ def export_action(file_paths):
         or följesedlar_data is None
         or moms_data is None
         or presentkort_data is None
-        or presentkort_sålda_data is None
     ):
         raise ValueError("One or more required files are missing from the file paths.")
+    
+    # Only raise a warning if `presentkort_sålda_data` is missing
+    if presentkort_sålda_data is None:
+        print("Warning: 'Presentkort_sold.csv' is missing. Proceeding without it.")
 
     file_path = file_paths[0]
     base_dir = os.path.dirname(file_path)
@@ -127,7 +130,6 @@ def map_serie_to_file_name(serie_value, butikskod_serie_map):
     return f"{butikskod_value}"
 
 
-
 def data_00(file_list):
     header_row = ["00", "20250111_001", "1.0.0"]
 
@@ -206,13 +208,13 @@ def data_01_02(följesedlar_data, file_list, butikskod_serie_map):
             # Create "02" row for valid article_id
             mapped_row_02 = [
                 "02",
-                "0", #TODO Check if this should somethign else if its a reference
+                "0", #TODO Check if this should be something else if its a reference
                 article_id,
                 row["Ant."],
                 format_value_as_integer_string(row["Pris "]),
                 format_value_as_integer_string(row["EnhetsprisExMoms"]),
                 row["Moms"].replace("%", "").replace(" ", ""),
-                row["Rabatt"], #TODO This should be fixed
+                format_rabatt_nr(row["Rabatt"]),
                 format_value_as_integer_string(row["EnhetsprisExMoms"])
             ]
             file_data[matching_file].append(mapped_row_02)
@@ -231,8 +233,8 @@ def data_03(försäljning_data, file_list):
     for _, row in försäljning_data.iterrows():
         # Mapped values for 03
         # 03 Mapped values
-        butiks_nr = row["KassaId"]
-        kassa_nr = row["KassaId"]
+        butiks_nr = format_kassa_id(row["KassaId"])
+        kassa_nr = format_kassa_id(row["KassaId"])
         raw_datum = row["Dok.datum"]
         datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
@@ -255,15 +257,18 @@ def data_04(betalsätt_data, file_list, presentkort_sålda, butikskod_serie_map)
 
     # Preprocess presentkort_sålda for easy lookup
     presentkort_sålda_data = {}
-    for _, row in presentkort_sålda.iterrows():
-        kort = str(row["Kort"])
-        betalmedel = row["Betalmedel"]
-        belopp = float(str(row["Belopp"]).replace(".", "").replace(",", "."))
+    if presentkort_sålda is not None:
+        for _, row in presentkort_sålda.iterrows():
+            kort = str(row["Kort"])
+            betalmedel = row["Betalmedel"]
+            belopp = float(str(row["Belopp"]).replace(".", "").replace(",", "."))
 
-        if kort != "nan":
-            if betalmedel not in presentkort_sålda_data:
-                presentkort_sålda_data[betalmedel] = 0
-            presentkort_sålda_data[betalmedel] += belopp
+            if kort != "nan":
+                if betalmedel not in presentkort_sålda_data:
+                    presentkort_sålda_data[betalmedel] = 0
+                presentkort_sålda_data[betalmedel] += belopp
+    else:
+        print("Warning: 'Presentkort_sold.csv' data is missing. Skipping presentkort_sold processing.")
 
     for _, row in betalsätt_data.iterrows():
         serie = row["Serie"]
@@ -504,9 +509,9 @@ def data_05(försäljning_data, file_list):
 
     for _, row in försäljning_data.iterrows():
         # Mapped values for 05
-        # 03 Mapped values
-        butiks_nr = row["KassaId"]
-        kassa_nr = row["KassaId"]
+        # 05 Mapped values
+        butiks_nr = format_kassa_id(row["KassaId"])
+        kassa_nr = format_kassa_id(row["KassaId"])
         raw_datum = row["Dok.datum"]
         datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
@@ -555,7 +560,7 @@ def data_06(försäljning_data, file_list, butikskod_serie_map):
         mapped_row_06 = [
             "06",
             artikelNr,
-            antal,
+            format_antal_as_integer_string(antal),
             format_value_as_integer_string(pris),
             tid,
             säljare,
@@ -576,8 +581,8 @@ def data_07(försäljning_data, file_list):
 
     for _, row in försäljning_data.iterrows():
         # Mapped values for 07
-        butiks_nr = row["KassaId"]
-        kassa_nr = row["KassaId"]
+        butiks_nr = format_kassa_id(row["KassaId"])
+        kassa_nr = format_kassa_id(row["KassaId"])
         raw_datum = row["Dok.datum"]
         datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
@@ -643,7 +648,7 @@ def data_08(försäljning_data, file_list, butikskod_serie_map):
             mapped_row_08 = [
                 "08",
                 varugrupp,
-                format_value_as_integer_string(data["antal"]),  # Total quantity
+                format_antal_as_integer_string(data["antal"]),  # Total quantity
                 format_value_as_integer_string(data["total_pris"]),  # Total price
                 moms,  # Format moms with commas
             ]
@@ -660,8 +665,8 @@ def data_09(försäljning_data, file_list):
 
     for _, row in försäljning_data.iterrows():
         # Mapped values for 09
-        butiks_nr = row["KassaId"]
-        kassa_nr = row["KassaId"]
+        butiks_nr = format_kassa_id(row["KassaId"])
+        kassa_nr = format_kassa_id(row["KassaId"])
         raw_datum = row["Dok.datum"]
         datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
@@ -680,7 +685,7 @@ def data_10(försäljning_data, file_list, butikskod_serie_map):
 
     for _, row in försäljning_data.iterrows():
         serie = row["Serie"]
-        antal = int(row["Enh.1"])  # Amount (Enh.1)
+        antal = int(row["Enh.1"])  # Amount (Enh.
         pris = float(
             row["Netto"].replace(".", "").replace(",", ".")
         )  # Convert Netto to float and handle formatting
@@ -749,8 +754,8 @@ def data_11(försäljning_data, file_list, butikskod_serie_map):
         serie = row["Serie"]
 
         # Mapped values for 11
-        butiks_nr = row["KassaId"]
-        kassa_nr = row["KassaId"]
+        butiks_nr = format_kassa_id(row["KassaId"])
+        kassa_nr = format_kassa_id(row["KassaId"])
         raw_datum = row["Dok.datum"]
         datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
@@ -872,3 +877,32 @@ def format_value_as_integer_string(value):
         formatted_value = value_str + "00"
 
     return formatted_value
+
+def format_antal_as_integer_string(value):
+    value_str = str(value).replace(",", ".")  # In case commas are used for decimals
+    if "." in value_str:
+        # Remove the decimal and append missing digits if necessary
+        integer_part, decimal_part = value_str.split(".")
+        decimal_part = decimal_part.ljust(2, "0")  # Ensure at least 2 digits
+        formatted_value = integer_part + decimal_part
+    else:
+        # No decimal point, just add "000"
+        formatted_value = value_str + "000"
+
+    return formatted_value
+
+def format_rabatt_nr(rabatt_nr):
+    if rabatt_nr == 0:
+        return "000"
+    elif 1 <= rabatt_nr <= 9:
+        return f"00{rabatt_nr}"
+    elif 10 <= rabatt_nr <= 99:
+        return f"0{rabatt_nr}"
+    else:
+        return str(rabatt_nr)
+
+def format_kassa_id(kassa_id):
+    if kassa_id < 10:
+        return f"0{kassa_id}"
+    else:
+        return str(kassa_id)

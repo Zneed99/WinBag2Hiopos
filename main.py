@@ -70,26 +70,28 @@ class FileRenameHandler(FileSystemEventHandler):
         """
         self.folder_to_watch = folder_to_watch
         self.export_required_files = export_required_files
+        self.optional_file = "Presentkort_sold.csv"  # Define the optional file
         self.import_required_file = import_required_file
         print(f"Initialized FileRenameHandler instance: {id(self)}")
 
     def _all_export_files_present(self):
-        """Check if all export required files exist."""
+        """Check if all required export files (excluding the optional file) exist."""
         current_files = set(os.listdir(self.folder_to_watch))
+        required_files = [file for file in self.export_required_files if file != self.optional_file]
         print(f"Current files in folder: {current_files}")
-        return all(req_file in current_files for req_file in self.export_required_files)
+        return all(req_file in current_files for req_file in required_files)
 
     def _is_import_file_present(self):
         """Check if the import file (PCS) exists."""
         return self.import_required_file in os.listdir(self.folder_to_watch)
 
     def _process_files(self):
-        """
-        Determine whether to do an export or an import:
-        - If PCS is present, do import_action.
-        - Else if all 3 required export files are present, do export_action.
-        - Otherwise, wait.
-        """
+        # Check for the optional file
+        optional_file_path = None
+        if self.optional_file in os.listdir(self.folder_to_watch):
+            optional_file_path = os.path.join(self.folder_to_watch, self.optional_file)
+            print(f"Optional file detected: {self.optional_file}")
+
         # Import scenario
         if self._is_import_file_present():
             file_path = os.path.join(self.folder_to_watch, self.import_required_file)
@@ -101,10 +103,11 @@ class FileRenameHandler(FileSystemEventHandler):
                 os.path.join(self.folder_to_watch, file)
                 for file in self.export_required_files
             ]
+            if optional_file_path:
+                file_paths.append(optional_file_path)  # Add optional file if present
             print("Detected all required export files. Starting export action.")
             custom_export_action(file_paths, self.folder_to_watch)
         else:
-            # Missing either PCS or the 3 required export files
             print("Waiting for PCS or all required export files...")
 
     def on_created(self, event):
@@ -146,8 +149,7 @@ if __name__ == "__main__":
         "Betalsätt.csv",
         "Följesedlar.csv",
         "Moms.csv",
-        "Presentkort.csv",
-        "Sålda.csv",
+        "Presentkort_used.csv",
     ]
     import_required_file = "PCS.ADM"
 
