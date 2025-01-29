@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 import pytz
 import time
+import math
 from decimal import Decimal
 
 
@@ -23,7 +24,7 @@ def export_action(file_paths):
             forsäljning_data = pd.read_csv(
                 file_path,
                 sep=";",
-                dtype={"Referens": str, "Netto": str},
+                dtype={"Referens": str, "Netto": str, "Varugrupp": str},
                 encoding="cp1252",
             )
         elif "Betalsätt" in file_name:
@@ -631,6 +632,12 @@ def data_08(försäljning_data, file_list, butikskod_serie_map):
         )  # Handle formatting for Netto
         moms = row["Moms"].replace("%", "00").replace(" ", "")
         varugrupp = row["Varugruppskod"]
+        if varugrupp and not math.isnan(float(varugrupp)):
+            varugrupp = int(float(varugrupp))
+        else:
+            # Handle the NaN case appropriately
+            varugrupp = "NaN"  # or another default value or action
+
         kod_doktyp = row["Kod för dokumenttyp"]
 
         # Find the matching file in file_list
