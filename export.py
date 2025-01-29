@@ -254,8 +254,8 @@ def data_03(försäljning_data, file_list):
     for _, row in försäljning_data.iterrows():
         # Mapped values for 03
         # 03 Mapped values
-        butiks_nr = format_kassa_id(row["KassaId"])
-        kassa_nr = format_kassa_id(row["KassaId"])
+        butiks_nr = format_kassa_id(row["ButikskodWinbag"])
+        kassa_nr = format_kassa_id(row["ButikskodWinbag"])
         raw_datum = row["Dok.datum"]
         datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
@@ -533,8 +533,8 @@ def data_05(försäljning_data, file_list):
     for _, row in försäljning_data.iterrows():
         # Mapped values for 05
         # 05 Mapped values
-        butiks_nr = format_kassa_id(row["KassaId"])
-        kassa_nr = format_kassa_id(row["KassaId"])
+        butiks_nr = format_kassa_id(row["ButikskodWinbag"])
+        kassa_nr = format_kassa_id(row["ButikskodWinbag"])
         raw_datum = row["Dok.datum"]
         datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
@@ -604,8 +604,8 @@ def data_07(försäljning_data, file_list):
 
     for _, row in försäljning_data.iterrows():
         # Mapped values for 07
-        butiks_nr = format_kassa_id(row["KassaId"])
-        kassa_nr = format_kassa_id(row["KassaId"])
+        butiks_nr = format_kassa_id(row["ButikskodWinbag"])
+        kassa_nr = format_kassa_id(row["ButikskodWinbag"])
         raw_datum = row["Dok.datum"]
         datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
@@ -694,8 +694,8 @@ def data_09(försäljning_data, file_list):
 
     for _, row in försäljning_data.iterrows():
         # Mapped values for 09
-        butiks_nr = format_kassa_id(row["KassaId"])
-        kassa_nr = format_kassa_id(row["KassaId"])
+        butiks_nr = format_kassa_id(row["ButikskodWinbag"])
+        kassa_nr = format_kassa_id(row["ButikskodWinbag"])
         raw_datum = row["Dok.datum"]
         datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
@@ -785,8 +785,8 @@ def data_11(försäljning_data, file_list, butikskod_serie_map):
         serie = row["Serie"]
 
         # Mapped values for 11
-        butiks_nr = format_kassa_id(row["KassaId"])
-        kassa_nr = format_kassa_id(row["KassaId"])
+        butiks_nr = format_kassa_id(row["ButikskodWinbag"])
+        kassa_nr = format_kassa_id(row["ButikskodWinbag"])
         raw_datum = row["Dok.datum"]
         datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
