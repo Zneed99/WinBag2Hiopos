@@ -180,7 +180,7 @@ def transform_huvudgrupp(row):
     name = row[6].strip('"')
 
     # Build the final string, semicolon-delimited
-    return f"{tf_value} ; {huvudgrupp_code} ; {name}"
+    return f"{huvudgrupp_code} ; {name}"
 
 
 def transform_varugrupp(row):
@@ -199,4 +199,4 @@ def transform_varugrupp(row):
     name = row[6].strip('"')
 
     # Build the final string, semicolon-delimited
-    return f"{tf_value} ; {huvudgrupp_code} ; {varugrupp_code} ; {name}"
+    return f"{huvudgrupp_code} ; {varugrupp_code} ; {name}"

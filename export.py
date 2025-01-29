@@ -20,37 +20,54 @@ def export_action(file_paths):
 
     for file_path in file_paths:
         file_name = os.path.basename(file_path)
+        
         if "Försäljning" in file_name:
             forsäljning_data = pd.read_csv(
-                file_path,
-                sep=";",
-                dtype={"Referens": str, "Netto": str, "Varugrupp": str},
-                encoding="cp1252",
+                file_path, sep=";", dtype={"Referens": str, "Netto": str, "Varugrupp": str}, encoding="ISO-8859-1"
             )
+
+        #     forsäljning_data.columns = [
+        #     col.encode("latin1").decode("utf-8") for col in forsäljning_data.columns
+        # ]
+            
         elif "Betalsätt" in file_name:
-            betalsätt_data = pd.read_csv(file_path, sep=";", encoding="cp1252")
+            betalsätt_data = pd.read_csv(file_path, sep=";", encoding="ISO-8859-1")
+
+        #     betalsätt_data.columns = [
+        #     col.encode("latin1").decode("utf-8") for col in betalsätt_data.columns
+        # ]
+
         elif "Följesedlar" in file_name:
             följesedlar_data = pd.read_csv(
-                file_path,
-                sep=";",
-                dtype={"Netto": str, "Referens": str},
-                encoding="cp1252",
+                file_path, sep=";", dtype={"Netto": str, "Referens": str}, encoding="ISO-8859-1"
             )
+
+        #     följesedlar_data.columns = [
+        #     col.encode("latin1").decode("utf-8") for col in följesedlar_data.columns
+        # ]    
+
         elif "Moms" in file_name:
-            moms_data = pd.read_csv(
-                file_path, sep=";", dtype={"Totalbelopp": str}, encoding="cp1252"
-            )
+            moms_data = pd.read_csv(file_path, sep=";", dtype={"Totalbelopp": str}, encoding="ISO-8859-1")
+
+        #     moms_data.columns = [
+        #     col.encode("latin1").decode("utf-8") for col in moms_data.columns
+        # ]  
+
         elif "Presentkort_used" in file_name:
-            presentkort_data = pd.read_csv(
-                file_path, sep=";", dtype={"Belopp": str}, encoding="cp1252"
-            )
+            presentkort_data = pd.read_csv(file_path, sep=";", dtype={"Belopp": str}, encoding="ISO-8859-1")
+
+            presentkort_data.columns = [
+            col.encode("latin1").decode("utf-8") for col in presentkort_data.columns
+        ]  
+
         elif "Presentkort_sold" in file_name:
             presentkort_sålda_data = pd.read_csv(
-                file_path,
-                sep=";",
-                dtype={"Belopp": str, "Kort": str},
-                encoding="cp1252",
+                file_path, sep=";", dtype={"Belopp": str, "Kort": str}, encoding="ISO-8859-1"
             )
+
+        #     presentkort_sålda_data.columns = [
+        #     col.encode("latin1").decode("utf-8") for col in presentkort_sålda_data.columns
+        # ]  
 
     if (
         forsäljning_data is None
@@ -166,6 +183,8 @@ def data_01_02(följesedlar_data, file_list, butikskod_serie_map):
     # Group data by "Nummer"
     grouped_data = följesedlar_data.groupby("Nummer")
 
+    print(följesedlar_data.columns.tolist())
+
     for number, group in grouped_data:
         # Find the first row with missing `article_id`
         missing_article_row = group[
@@ -180,10 +199,12 @@ def data_01_02(följesedlar_data, file_list, butikskod_serie_map):
         else:
             reference = ""  # No missing article_id, set reference to empty string
 
+        print(följesedlar_data.columns.tolist())
+
         # Create the "01" row (unique per "Nummer")
         first_row = group.iloc[0]
-        shop_id = first_row["Butikskod"]
-        cash_register_id = first_row["KassaId"]
+        shop_id = first_row["ButikskodWinbag"]
+        print(f"Shop ID: {shop_id}")
         customer_id = first_row["Kundkod"]
         date = first_row["Dok.datum"]
         date = datetime.strptime(date, "%d/%m/%Y").strftime("%Y-%m-%d")
@@ -209,8 +230,8 @@ def data_01_02(följesedlar_data, file_list, butikskod_serie_map):
 
         mapped_row_01 = [
             "01",
-            shop_id,
-            cash_register_id,
+            f"0{shop_id}",
+            f"0{shop_id}",
             customer_id,
             date,
             reference,  # Set reference from missing "Referens" row or empty string
@@ -226,17 +247,23 @@ def data_01_02(följesedlar_data, file_list, butikskod_serie_map):
                 # Skip this row if article_id is missing
                 continue
 
+            antal = row["Ant."]
+            pris = format_value_as_integer_string(row["Netto"])
+            enhetspris = round(float(row["EnhetsprisExMoms"].replace(",", ".")), 2)
+            if antal < 0:
+                enhetspris = f"-{enhetspris}"
+
             # Create "02" row for valid article_id
             mapped_row_02 = [
                 "02",
                 "0",  # TODO Check if this should be something else if its a reference
                 article_id,
                 row["Ant."],
-                format_value_as_integer_string(row["Pris "]),
-                format_value_as_integer_string(row["EnhetsprisExMoms"]),
+                pris,
+                format_value_as_integer_string(enhetspris),
                 row["Moms"].replace("%", "").replace(" ", ""),
                 format_rabatt_nr(row["Rabatt"]),
-                format_value_as_integer_string(row["EnhetsprisExMoms"]),
+                format_value_as_integer_string(enhetspris),
             ]
             file_data[matching_file].append(mapped_row_02)
 
