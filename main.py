@@ -13,7 +13,7 @@ from import_ import import_action
 
 def move_files_to_old_folder(file_paths, folder_to_watch):
     """Move the processed files to the 'Old Files' folder with a timestamp in the name."""
-    old_folder_path = os.path.join(folder_to_watch, "Old Files")
+    old_folder_path = os.path.join("C:/winbag_export", "Old Files")
 
     # Create the 'Old Files' folder if it doesn't exist
     if not os.path.exists(old_folder_path):
@@ -32,9 +32,6 @@ def move_files_to_old_folder(file_paths, folder_to_watch):
         old_file_path = os.path.join(old_folder_path, new_file_name)
         shutil.move(file_path, old_file_path)
         print(f"Moved {file_name} to 'Old Files' as {new_file_name}.")
-
-
-import traceback
 
 
 def custom_export_action(file_paths, folder_to_watch):
@@ -65,46 +62,55 @@ class FileRenameHandler(FileSystemEventHandler):
     def __init__(self, folder_to_watch, export_required_files, import_required_file):
         """
         :param folder_to_watch: Folder being monitored
-        :param export_required_files: List of files for export (Försäljning, Betalsätt, Följesedlar)
+        :param export_required_files: List of required files for export
         :param import_required_file: Name of the file for import (PCS)
         """
         self.folder_to_watch = folder_to_watch
-        self.export_required_files = export_required_files
-        self.optional_file = "Presentkort_sold.csv"  # Define the optional file
+        self.mandatory_files = [file for file in export_required_files if file not in [
+            "Presentkort_sold.csv", "Presentkort_used.csv", "Följesedlar.csv"
+        ]]
+        self.optional_files = ["Presentkort_sold.csv", "Presentkort_used.csv", "Följesedlar.csv"]
         self.import_required_file = import_required_file
         print(f"Initialized FileRenameHandler instance: {id(self)}")
 
-    def _all_export_files_present(self):
-        """Check if all required export files (excluding the optional file) exist."""
+    def _all_mandatory_files_present(self):
+        """Check if all mandatory export files exist (ignoring optional ones)."""
         current_files = set(os.listdir(self.folder_to_watch))
-        required_files = [file for file in self.export_required_files if file != self.optional_file]
         print(f"Current files in folder: {current_files}")
-        return all(req_file in current_files for req_file in required_files)
+        return all(req_file in current_files for req_file in self.mandatory_files)
+
+    def _get_optional_files(self):
+        """Check which optional files exist and return their paths."""
+        current_files = set(os.listdir(self.folder_to_watch))
+        return [
+            os.path.join(self.folder_to_watch, file) 
+            for file in self.optional_files if file in current_files
+        ]
 
     def _is_import_file_present(self):
-        """Check if the import file (PCS) exists."""
+        """Check if the import file (PCS.ADM) exists."""
         return self.import_required_file in os.listdir(self.folder_to_watch)
 
     def _process_files(self):
-        # Check for the optional file
-        optional_file_path = None
-        if self.optional_file in os.listdir(self.folder_to_watch):
-            optional_file_path = os.path.join(self.folder_to_watch, self.optional_file)
-            print(f"Optional file detected: {self.optional_file}")
-
         # Import scenario
         if self._is_import_file_present():
             file_path = os.path.join(self.folder_to_watch, self.import_required_file)
             print("Detected PCS file. Starting import action.")
             custom_import_action([file_path], self.folder_to_watch)
+
         # Export scenario
-        elif self._all_export_files_present():
+        elif self._all_mandatory_files_present():
             file_paths = [
                 os.path.join(self.folder_to_watch, file)
-                for file in self.export_required_files
+                for file in self.mandatory_files
             ]
-            if optional_file_path:
-                file_paths.append(optional_file_path)  # Add optional file if present
+
+            # Include optional files if they exist
+            optional_files = self._get_optional_files()
+            if optional_files:
+                file_paths.extend(optional_files)
+                print(f"Including optional files: {optional_files}")
+
             print("Detected all required export files. Starting export action.")
             custom_export_action(file_paths, self.folder_to_watch)
         else:
@@ -115,6 +121,7 @@ class FileRenameHandler(FileSystemEventHandler):
             file_path = event.src_path
             print(f"File added: {file_path}")
             self._process_files()
+
 
 
 def monitor_folder(folder_to_watch, export_required_files, import_required_file):
@@ -140,16 +147,13 @@ def monitor_folder(folder_to_watch, export_required_files, import_required_file)
 if __name__ == "__main__":
 
     # Default to home directory + "WinBag2Hipos-SystemService"
-    folder_to_watch = os.path.join(
-        os.path.expanduser("~"), "WinBag2Hipos-SystemService"
-    )
+    folder_to_watch = "C:/winbag_export/Input_Files_Here"
 
     export_required_files = [
         "Försäljning.csv",
         "Betalsätt.csv",
         "Följesedlar.csv",
         "Moms.csv",
-        "Presentkort_used.csv",
     ]
     import_required_file = "PCS.ADM"
 

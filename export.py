@@ -72,9 +72,7 @@ def export_action(file_paths):
     if (
         forsäljning_data is None
         or betalsätt_data is None
-        or följesedlar_data is None
         or moms_data is None
-        or presentkort_data is None
     ):
         raise ValueError("One or more required files are missing from the file paths.")
 
@@ -82,9 +80,15 @@ def export_action(file_paths):
     if presentkort_sålda_data is None:
         print("Warning: 'Presentkort_sold.csv' is missing. Proceeding without it.")
 
+    if presentkort_data is None:
+        print("Warning: 'Presentkort_used.csv' is missing. Proceeding without it.")
+
+    if följesedlar_data is None:
+        print("Warning: 'Följesedlar.csv' is missing. Proceeding without it.")
+
     file_path = file_paths[0]
-    base_dir = os.path.dirname(file_path)
-    export_folder = os.path.join(base_dir, "Exported Files")
+    #base_dir = os.path.dirname(file_path)
+    export_folder = os.path.join("C:/winbag_export")
 
     butikskod_serie_map = create_butikskod_serie_map(forsäljning_data)
 
@@ -180,92 +184,96 @@ def data_01_02(följesedlar_data, file_list, butikskod_serie_map):
     file_data = {}
     current_number = None
 
-    # Group data by "Nummer"
-    grouped_data = följesedlar_data.groupby("Nummer")
+    #print(följesedlar_data.columns.tolist())
 
-    print(följesedlar_data.columns.tolist())
+    if följesedlar_data is not None:
+        # Group data by "Nummer"
+        grouped_data = följesedlar_data.groupby("Nummer")
+        for number, group in grouped_data:
+            # Find the first row with missing `article_id`
+            missing_article_row = group[
+                group["Referens"].isna() | (group["Referens"] == "")
+            ].head(1)
 
-    for number, group in grouped_data:
-        # Find the first row with missing `article_id`
-        missing_article_row = group[
-            group["Referens"].isna() | (group["Referens"] == "")
-        ].head(1)
+            # Determine the reference value based on missing `article_id`
+            if not missing_article_row.empty:
+                reference = missing_article_row.iloc[0][
+                    "Benämning"
+                ]  # Take the "Benämning" from the first missing "Referens"
+            else:
+                reference = ""  # No missing article_id, set reference to empty string
 
-        # Determine the reference value based on missing `article_id`
-        if not missing_article_row.empty:
-            reference = missing_article_row.iloc[0][
-                "Benämning"
-            ]  # Take the "Benämning" from the first missing "Referens"
-        else:
-            reference = ""  # No missing article_id, set reference to empty string
+            print(följesedlar_data.columns.tolist())
 
-        print(följesedlar_data.columns.tolist())
+            # Create the "01" row (unique per "Nummer")
+            first_row = group.iloc[0]
+            shop_id = first_row["ButikskodWinbag"]
+            print(f"Shop ID: {shop_id}")
+            customer_id = first_row["Kundkod"]
+            date = first_row["Dok.datum"]
+            date = datetime.strptime(date, "%d/%m/%Y").strftime("%Y-%m-%d")
+            receipt_id = first_row["Nummer"]
+            seller_id = first_row["Anställd"]
 
-        # Create the "01" row (unique per "Nummer")
-        first_row = group.iloc[0]
-        shop_id = first_row["ButikskodWinbag"]
-        print(f"Shop ID: {shop_id}")
-        customer_id = first_row["Kundkod"]
-        date = first_row["Dok.datum"]
-        date = datetime.strptime(date, "%d/%m/%Y").strftime("%Y-%m-%d")
-        receipt_id = first_row["Nummer"]
-        seller_id = first_row["Anställd"]
+            # Find the matching file in file_list
+            serie = first_row["Serie"]
+            target_file = map_serie_to_file_name(serie, butikskod_serie_map)
 
-        # Find the matching file in file_list
-        serie = first_row["Serie"]
-        target_file = map_serie_to_file_name(serie, butikskod_serie_map)
+            # print(f"Target file: {target_file}")
+            target_file_partial = f"{target_file}"
+            matching_file = next((f for f in file_list if target_file_partial in f), None)
 
-        # print(f"Target file: {target_file}")
-        target_file_partial = f"{target_file}"
-        matching_file = next((f for f in file_list if target_file_partial in f), None)
-
-        if not matching_file:
-            print(
-                f"Warning: Target file {target_file_partial} not found in file_list. Skipping group."
-            )
-            continue
-
-        if matching_file not in file_data:
-            file_data[matching_file] = []
-
-        mapped_row_01 = [
-            "01",
-            f"0{shop_id}",
-            f"0{shop_id}",
-            customer_id,
-            date,
-            reference,  # Set reference from missing "Referens" row or empty string
-            receipt_id,
-            seller_id,
-        ]
-        file_data[matching_file].append(mapped_row_01)
-
-        # Create "02" rows only for rows where article_id is present
-        for _, row in group.iterrows():
-            article_id = row["Referens"]
-            if pd.isna(article_id) or article_id == "":
-                # Skip this row if article_id is missing
+            if not matching_file:
+                print(
+                    f"Warning: Target file {target_file_partial} not found in file_list. Skipping group."
+                )
                 continue
 
-            antal = row["Ant."]
-            pris = format_value_as_integer_string(row["Netto"])
-            enhetspris = round(float(row["EnhetsprisExMoms"].replace(",", ".")), 2)
-            if antal < 0:
-                enhetspris = f"-{enhetspris}"
+            if matching_file not in file_data:
+                file_data[matching_file] = []
 
-            # Create "02" row for valid article_id
-            mapped_row_02 = [
-                "02",
-                "0",  # TODO Check if this should be something else if its a reference
-                article_id,
-                row["Ant."],
-                pris,
-                format_value_as_integer_string(enhetspris),
-                row["Moms"].replace("%", "").replace(" ", ""),
-                format_rabatt_nr(row["Rabatt"]),
-                format_value_as_integer_string(enhetspris),
+            mapped_row_01 = [
+                "01",
+                f"0{shop_id}",
+                f"0{shop_id}",
+                customer_id,
+                date,
+                reference,  # Set reference from missing "Referens" row or empty string
+                receipt_id,
+                seller_id,
             ]
-            file_data[matching_file].append(mapped_row_02)
+            file_data[matching_file].append(mapped_row_01)
+
+            # Create "02" rows only for rows where article_id is present
+            for _, row in group.iterrows():
+                article_id = row["Referens"]
+                if pd.isna(article_id) or article_id == "":
+                    # Skip this row if article_id is missing
+                    continue
+
+                antal = row["Ant."]
+                pris = format_value_as_integer_string(row["Netto"])
+                enhetspris = round(float(row["EnhetsprisExMoms"].replace(",", ".")), 2)
+                if antal < 0:
+                    enhetspris = f"-{enhetspris}"
+
+                # Create "02" row for valid article_id
+                mapped_row_02 = [
+                    "02",
+                    "0",  # TODO Check if this should be something else if its a reference
+                    article_id,
+                    format_antal_as_integer_string(row["Ant."]),
+                    pris,
+                    format_value_as_integer_string(enhetspris),
+                    row["Moms"].replace("%", "00").replace(" ", ""),
+                    format_rabatt_nr(row["Rabatt"]),
+                    format_value_as_integer_string(enhetspris),
+                ]
+                file_data[matching_file].append(mapped_row_02)
+    else:
+        print(
+            "Warning: 'Följesedlar.csv' data is missing. Skipping följesedlar processing."
+        )
 
     # Write each set of rows to its corresponding file
     for target_file, rows in file_data.items():
@@ -421,45 +429,50 @@ def data_04_följesedlar(följesedlar_data, file_list, butikskod_serie_map):
     processed_numbers_for_file = {}  # Track processed numbers per file
     suffix_mapping = {}  # Store the Bokföringssuffix for each betalmedel per file
 
-    for _, row in följesedlar_data.iterrows():
-        serie = row["Serie"]
-        number = row["Nummer"]
-        bokföringssuffix = row["Bokföringssuffix"]
+    if följesedlar_data is not None:
+        for _, row in följesedlar_data.iterrows():
+            serie = row["Serie"]
+            number = row["Nummer"]
+            bokföringssuffix = row["Bokföringssuffix"]
 
-        # 04 Mapped values
-        konto = row["Dok.Id"]
-        pris_value = float(row["Netto"].replace(".", "").replace(",", "."))
+            # 04 Mapped values
+            konto = row["Dok.Id"]
+            pris_value = float(row["Netto"].replace(".", "").replace(",", "."))
 
-        # Determine debet and kredit based on sign of pris_value
-        debetbelopp = pris_value if pris_value > 0 else 0.0
-        kreditbelopp = abs(pris_value) if pris_value < 0 else 0.0
+            # Determine debet and kredit based on sign of pris_value
+            debetbelopp = pris_value if pris_value > 0 else 0.0
+            kreditbelopp = abs(pris_value) if pris_value < 0 else 0.0
 
-        # Find the matching file in file_list
-        target_file = map_serie_to_file_name(serie, butikskod_serie_map)
-        target_file_partial = f"{target_file}"
-        matching_file = next((f for f in file_list if target_file_partial in f), None)
+            # Find the matching file in file_list
+            target_file = map_serie_to_file_name(serie, butikskod_serie_map)
+            target_file_partial = f"{target_file}"
+            matching_file = next((f for f in file_list if target_file_partial in f), None)
 
-        if not matching_file:
-            print(
-                f"Warning: Target file {target_file_partial} not found in file_list. Skipping row."
-            )
-            continue
+            if not matching_file:
+                print(
+                    f"Warning: Target file {target_file_partial} not found in file_list. Skipping row."
+                )
+                continue
 
-        if matching_file not in file_data:
-            file_data[matching_file] = []
-            sums_per_file[matching_file] = {"debet": 0, "kredit": 0}
-            processed_numbers_for_file[matching_file] = set()
-            suffix_mapping[matching_file] = None
+            if matching_file not in file_data:
+                file_data[matching_file] = []
+                sums_per_file[matching_file] = {"debet": 0, "kredit": 0}
+                processed_numbers_for_file[matching_file] = set()
+                suffix_mapping[matching_file] = None
 
-        # Update sums
-        sums_per_file[matching_file]["debet"] += debetbelopp
-        sums_per_file[matching_file]["kredit"] += kreditbelopp
+            # Update sums
+            sums_per_file[matching_file]["debet"] += debetbelopp
+            sums_per_file[matching_file]["kredit"] += kreditbelopp
 
-        if suffix_mapping[matching_file] is None:
-            suffix_mapping[matching_file] = bokföringssuffix
+            if suffix_mapping[matching_file] is None:
+                suffix_mapping[matching_file] = bokföringssuffix
 
-        # Mark this number as processed
-        processed_numbers_for_file[matching_file].add(number)
+            # Mark this number as processed
+            processed_numbers_for_file[matching_file].add(number)
+    else:
+        print(
+            "Warning: 'Följesedlar.csv' data is missing. Skipping följesedlar processing."
+        )
 
     # Add the "04" rows based on stored sums for each matching file
     for matching_file, sums in sums_per_file.items():
@@ -492,42 +505,48 @@ def data_04_presentkort(presentkort_data, file_list, serie_butikskod_map):
     sums_per_file = {}
     account_mapping = {}
 
-    for _, row in presentkort_data.iterrows():
-        butikskod = row["Butikskod"]
+    if presentkort_data is not None:
+        for _, row in presentkort_data.iterrows():
+            butikskod = row["Butikskod"]
 
-        serie = serie_butikskod_map.get(butikskod)
-        presentkortskonto = row["Presentkortskonto"]
+            serie = serie_butikskod_map.get(butikskod)
+            presentkortskonto = row["Presentkortskonto"]
 
-        # Extract transaction type and value
-        typ_av_transaktion = row["Kod för kundkortstransaktioner"]
-        pris_value = float(row["Belopp"].replace(".", "").replace(",", "."))
+            # Extract transaction type and value
+            typ_av_transaktion = row["Kod för kundkortstransaktioner"]
+            pris_value = float(row["Belopp"].replace(".", "").replace(",", "."))
 
-        # Determine positive_value and negative_value based on transaction type
-        positive_value = abs(pris_value) if typ_av_transaktion == 5 else 0.0
-        negative_value = pris_value if typ_av_transaktion == 2 else 0.0
+            # Determine positive_value and negative_value based on transaction type
+            positive_value = abs(pris_value) if typ_av_transaktion == 5 else 0.0
+            negative_value = pris_value if typ_av_transaktion == 2 else 0.0
 
-        # Find the matching file in file_list
-        target_file = map_serie_to_file_name(serie, serie_butikskod_map)
-        target_file_partial = f"{target_file}"
-        matching_file = next((f for f in file_list if target_file_partial in f), None)
+            # Find the matching file in file_list
+            target_file = map_serie_to_file_name(serie, serie_butikskod_map)
+            target_file_partial = f"{target_file}"
+            matching_file = next((f for f in file_list if target_file_partial in f), None)
 
-        if not matching_file:
-            print(
-                f"Warning: Target file {target_file_partial} not found in file_list. Skipping row."
-            )
-            continue
+            if not matching_file:
+                print(
+                    f"Warning: Target file {target_file_partial} not found in file_list. Skipping row."
+                )
+                continue
 
-        if matching_file not in file_data:
-            file_data[matching_file] = []
-            sums_per_file[matching_file] = {"positive": 0, "negative": 0}
-            account_mapping[matching_file] = None
+            if matching_file not in file_data:
+                file_data[matching_file] = []
+                sums_per_file[matching_file] = {"positive": 0, "negative": 0}
+                account_mapping[matching_file] = None
 
-        # Update sums
-        sums_per_file[matching_file]["positive"] += positive_value
-        sums_per_file[matching_file]["negative"] += negative_value
+            # Update sums
+            sums_per_file[matching_file]["positive"] += positive_value
+            sums_per_file[matching_file]["negative"] += negative_value
 
-        if account_mapping[matching_file] is None:
-            account_mapping[matching_file] = presentkortskonto
+            if account_mapping[matching_file] is None:
+                account_mapping[matching_file] = presentkortskonto
+
+    else:
+        print(
+            "Warning: 'Presentkort_used.csv' data is missing. Skipping presentkort processing."
+        )
 
     # Add the "04" rows based on stored sums for each matching file
     for matching_file, sums in sums_per_file.items():

@@ -27,11 +27,15 @@ def import_action(file_paths):
         return
 
     # Define output file names in the same directory as pcs_file_path
-    base_dir = os.path.dirname(pcs_file_path)
-    import_folder = os.path.join(base_dir, "Imported Files")
+    #base_dir = os.path.dirname(pcs_file_path)
+    import_folder = os.path.join("C:\\", "winbag_export", "Imported_Files")
+
     if not os.path.exists(import_folder):
         os.makedirs(import_folder)
         print(f"Created 'Imported Files' folder at {import_folder}")
+
+    print(f"Resolved import folder path: {os.path.abspath(import_folder)}")
+
 
     stockholm_tz = pytz.timezone("Europe/Stockholm")
     current_time = datetime.now(stockholm_tz).strftime("%Y%m%d-%H-%M-%S")
