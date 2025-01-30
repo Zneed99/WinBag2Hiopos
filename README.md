@@ -8,6 +8,7 @@ Steg 0:
 Ladda ner python(kom ihåg path)
 Ladda ner nssm
 Ladda ner repository(kodbas) från github
+Lägg till Python paths i Systemvariabler(Det läggs annars bara till i användarens Path variabler) Kopiera dessa och lägg in på Path i systemvariabler också
 * 
 
 Steg 1:
@@ -37,12 +38,15 @@ nssm install "Winbag7Hiopos" "C:\Users\Kassa1\AppData\Local\Programs\Python\Pyth
 
 
 Paket som behöver installeras
-pandas
-watchdog
-pytz
+pip install pandas
+pip install watchdog
+pip install pytz
 
 
 Kommentar: Om du inte får administration prompt att godkänna så kör cmd som admministratör
+
+!!!VIKTIGT!!!
+Använd inga mellanslag i pathen till main.py, då fungerar det inte
 
 cd /d C:\Users
 
