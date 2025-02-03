@@ -7,7 +7,7 @@ import math
 from decimal import Decimal
 
 
-def export_action(file_paths):
+def export_action(file_paths, sales_date):
     # Match file names to specific data objects
     forsäljning_data = None
     betalsätt_data = None
@@ -20,16 +20,19 @@ def export_action(file_paths):
 
     for file_path in file_paths:
         file_name = os.path.basename(file_path)
-        
+
         if "Försäljning" in file_name:
             forsäljning_data = pd.read_csv(
-                file_path, sep=";", dtype={"Referens": str, "Netto": str, "Varugrupp": str}, encoding="ISO-8859-1"
+                file_path,
+                sep=";",
+                dtype={"Referens": str, "Netto": str, "Varugrupp": str},
+                encoding="ISO-8859-1",
             )
 
         #     forsäljning_data.columns = [
         #     col.encode("latin1").decode("utf-8") for col in forsäljning_data.columns
         # ]
-            
+
         elif "Betalsätt" in file_name:
             betalsätt_data = pd.read_csv(file_path, sep=";", encoding="ISO-8859-1")
 
@@ -39,41 +42,47 @@ def export_action(file_paths):
 
         elif "Följesedlar" in file_name:
             följesedlar_data = pd.read_csv(
-                file_path, sep=";", dtype={"Netto": str, "Referens": str}, encoding="ISO-8859-1"
+                file_path,
+                sep=";",
+                dtype={"Netto": str, "Referens": str},
+                encoding="ISO-8859-1",
             )
 
         #     följesedlar_data.columns = [
         #     col.encode("latin1").decode("utf-8") for col in följesedlar_data.columns
-        # ]    
+        # ]
 
         elif "Moms" in file_name:
-            moms_data = pd.read_csv(file_path, sep=";", dtype={"Totalbelopp": str}, encoding="ISO-8859-1")
+            moms_data = pd.read_csv(
+                file_path, sep=";", dtype={"Totalbelopp": str}, encoding="ISO-8859-1"
+            )
 
         #     moms_data.columns = [
         #     col.encode("latin1").decode("utf-8") for col in moms_data.columns
-        # ]  
+        # ]
 
         elif "Presentkort_used" in file_name:
-            presentkort_data = pd.read_csv(file_path, sep=";", dtype={"Belopp": str}, encoding="ISO-8859-1")
+            presentkort_data = pd.read_csv(
+                file_path, sep=";", dtype={"Belopp": str}, encoding="ISO-8859-1"
+            )
 
             presentkort_data.columns = [
-            col.encode("latin1").decode("utf-8") for col in presentkort_data.columns
-        ]  
+                col.encode("latin1").decode("utf-8") for col in presentkort_data.columns
+            ]
 
         elif "Presentkort_sold" in file_name:
             presentkort_sålda_data = pd.read_csv(
-                file_path, sep=";", dtype={"Belopp": str, "Kort": str}, encoding="ISO-8859-1"
+                file_path,
+                sep=";",
+                dtype={"Belopp": str, "Kort": str},
+                encoding="ISO-8859-1",
             )
 
         #     presentkort_sålda_data.columns = [
         #     col.encode("latin1").decode("utf-8") for col in presentkort_sålda_data.columns
-        # ]  
+        # ]
 
-    if (
-        forsäljning_data is None
-        or betalsätt_data is None
-        or moms_data is None
-    ):
+    if forsäljning_data is None or betalsätt_data is None or moms_data is None:
         raise ValueError("One or more required files are missing from the file paths.")
 
     # Only raise a warning if `presentkort_sålda_data` is missing
@@ -87,14 +96,12 @@ def export_action(file_paths):
         print("Warning: 'Följesedlar.csv' is missing. Proceeding without it.")
 
     file_path = file_paths[0]
-    #base_dir = os.path.dirname(file_path)
+    # base_dir = os.path.dirname(file_path)
     export_folder = os.path.join("C:/winbag_export")
 
     butikskod_serie_map = create_butikskod_serie_map(forsäljning_data)
 
-    file_list = create_resulting_files(
-        forsäljning_data, export_folder, butikskod_serie_map
-    )
+    file_list = create_resulting_files(export_folder, butikskod_serie_map, sales_date)
 
     # print(f"Serie to butikskod map: {butikskod_serie_map}")
 
@@ -120,26 +127,20 @@ def export_action(file_paths):
     # Add further export functionality here
 
 
-def create_resulting_files(forsäljning_data, target_folder, butikskod_serie_map):
+def create_resulting_files(target_folder, butikskod_serie_map, sales_date):
     created_files = []
 
-    # Ensure the target folder exists
     if not os.path.exists(target_folder):
         os.makedirs(target_folder)
 
-    # Get the current timestamp in Stockholm timezone
-    stockholm_tz = pytz.timezone("Europe/Stockholm")
-    timestamp = datetime.now(stockholm_tz).strftime("%y%m%d_%H%M")
+    print(f"Sales date: {sales_date}")
 
-    # Iterate over the butikskod_serie_map to create files based on Butikskod
     for butikskod, serie in butikskod_serie_map.items():
-        # Create a file name using Butikskod instead of Serie
-        file_name = f"0{butikskod}_000_{timestamp}.TXT"
+        file_name = f"0{butikskod}_000_{sales_date}.TXT"
         file_path = os.path.join(target_folder, file_name)
 
-        # Write an empty file with no data, only an optional placeholder header
         with open(file_path, "w") as f:
-            pass  # Creates an empty file
+            pass
 
         created_files.append(file_path)
 
@@ -184,7 +185,7 @@ def data_01_02(följesedlar_data, file_list, butikskod_serie_map):
     file_data = {}
     current_number = None
 
-    #print(följesedlar_data.columns.tolist())
+    # print(följesedlar_data.columns.tolist())
 
     if följesedlar_data is not None:
         # Group data by "Nummer"
@@ -221,7 +222,9 @@ def data_01_02(följesedlar_data, file_list, butikskod_serie_map):
 
             # print(f"Target file: {target_file}")
             target_file_partial = f"{target_file}"
-            matching_file = next((f for f in file_list if target_file_partial in f), None)
+            matching_file = next(
+                (f for f in file_list if target_file_partial in f), None
+            )
 
             if not matching_file:
                 print(
@@ -446,7 +449,9 @@ def data_04_följesedlar(följesedlar_data, file_list, butikskod_serie_map):
             # Find the matching file in file_list
             target_file = map_serie_to_file_name(serie, butikskod_serie_map)
             target_file_partial = f"{target_file}"
-            matching_file = next((f for f in file_list if target_file_partial in f), None)
+            matching_file = next(
+                (f for f in file_list if target_file_partial in f), None
+            )
 
             if not matching_file:
                 print(
@@ -523,7 +528,9 @@ def data_04_presentkort(presentkort_data, file_list, serie_butikskod_map):
             # Find the matching file in file_list
             target_file = map_serie_to_file_name(serie, serie_butikskod_map)
             target_file_partial = f"{target_file}"
-            matching_file = next((f for f in file_list if target_file_partial in f), None)
+            matching_file = next(
+                (f for f in file_list if target_file_partial in f), None
+            )
 
             if not matching_file:
                 print(
