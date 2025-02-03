@@ -449,14 +449,13 @@ def data_04_följesedlar(följesedlar_data, file_list, butikskod_serie_map):
             # 04 Mapped values
             konto = row["Dok.Id"]
             pris_value = float(row["Netto"].replace(".", "").replace(",", "."))
-            antal = row["Ant."]
 
-            if antal < 0:
-                pris_value = -pris_value
 
-            # Determine debet and kredit based on sign of pris_value
+            # Determine debet and kredit for positive antal
             debetbelopp = pris_value if pris_value > 0 else 0.0
             kreditbelopp = abs(pris_value) if pris_value < 0 else 0.0
+
+            print(f"Debet: {debetbelopp}, Kredit: {kreditbelopp}")
 
             # Find the matching file in file_list
             target_file = map_serie_to_file_name(serie, butikskod_serie_map)
@@ -465,7 +464,6 @@ def data_04_följesedlar(följesedlar_data, file_list, butikskod_serie_map):
                 (f for f in file_list if target_file_partial in f), None
             )
             
-
 
             if not matching_file:
                 print(
