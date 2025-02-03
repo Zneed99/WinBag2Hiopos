@@ -38,10 +38,10 @@ def extract_date_from_filename(filename):
     return None
 
 
-def custom_export_action(file_paths, folder_to_watch, sales_date=None):
+def custom_export_action(file_paths, folder_to_watch):
     try:
         print("Performing export...")
-        export_action(file_paths, sales_date)
+        export_action(file_paths)
         move_files_to_old_folder(file_paths, folder_to_watch)
     except Exception as e:
         tb = traceback.format_exc()
@@ -118,7 +118,7 @@ class FileRenameHandler(FileSystemEventHandler):
                 print(f"Including optional files: {optional_files}")
 
             print("Detected all required export files. Starting export action.")
-            custom_export_action(file_paths, self.folder_to_watch, sales_date)
+            custom_export_action(file_paths, self.folder_to_watch)
         else:
             print("Waiting for PCS or all required export files...")
 

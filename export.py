@@ -1,13 +1,14 @@
 import os
 import pandas as pd
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import pytz
 import time
 import math
 from decimal import Decimal
 
 
-def export_action(file_paths, sales_date):
+def export_action(file_paths):
     # Match file names to specific data objects
     forsäljning_data = None
     betalsätt_data = None
@@ -101,7 +102,7 @@ def export_action(file_paths, sales_date):
 
     butikskod_serie_map = create_butikskod_serie_map(forsäljning_data)
 
-    file_list = create_resulting_files(export_folder, butikskod_serie_map, sales_date)
+    file_list = create_resulting_files(forsäljning_data, export_folder, butikskod_serie_map)
 
     # print(f"Serie to butikskod map: {butikskod_serie_map}")
 
@@ -127,16 +128,22 @@ def export_action(file_paths, sales_date):
     # Add further export functionality here
 
 
-def create_resulting_files(target_folder, butikskod_serie_map, sales_date):
+def create_resulting_files(forsäljning_data, target_folder, butikskod_serie_map):
     created_files = []
 
     if not os.path.exists(target_folder):
         os.makedirs(target_folder)
 
-    print(f"Sales date: {sales_date}")
+    #print(f"Sales date: {sales_date}")
+    for _, row in forsäljning_data.iterrows():
+        sales_date = row["Dok.datum"]
+
+
+    time = datetime.now(ZoneInfo("Europe/Stockholm")).strftime("%H%M")
+    formated_sales_date = format_sales_date(sales_date)
 
     for butikskod, serie in butikskod_serie_map.items():
-        file_name = f"0{butikskod}_000_{sales_date}.TXT"
+        file_name = f"0{butikskod}_000_{formated_sales_date}_{time}.TXT"
         file_path = os.path.join(target_folder, file_name)
 
         with open(file_path, "w") as f:
@@ -204,11 +211,11 @@ def data_01_02(följesedlar_data, file_list, butikskod_serie_map):
             else:
                 reference = ""  # No missing article_id, set reference to empty string
 
-            print(följesedlar_data.columns.tolist())
+            #print(följesedlar_data.columns.tolist())
 
             # Create the "01" row (unique per "Nummer")
             first_row = group.iloc[0]
-            shop_id = first_row["ButikskodWinbag"]
+            shop_id = first_row["ButikskodWinbag"]  
             print(f"Shop ID: {shop_id}")
             customer_id = first_row["Kundkod"]
             date = first_row["Dok.datum"]
@@ -255,10 +262,11 @@ def data_01_02(följesedlar_data, file_list, butikskod_serie_map):
                     continue
 
                 antal = row["Ant."]
-                pris = format_value_as_integer_string(row["Netto"])
+                pris = format_value_as_integer_string(row["Pris "])
                 enhetspris = round(float(row["EnhetsprisExMoms"].replace(",", ".")), 2)
                 if antal < 0:
                     enhetspris = f"-{enhetspris}"
+                    pris = f"-{pris}"
 
                 # Create "02" row for valid article_id
                 mapped_row_02 = [
@@ -441,6 +449,10 @@ def data_04_följesedlar(följesedlar_data, file_list, butikskod_serie_map):
             # 04 Mapped values
             konto = row["Dok.Id"]
             pris_value = float(row["Netto"].replace(".", "").replace(",", "."))
+            antal = row["Ant."]
+
+            if antal < 0:
+                pris_value = -pris_value
 
             # Determine debet and kredit based on sign of pris_value
             debetbelopp = pris_value if pris_value > 0 else 0.0
@@ -452,6 +464,8 @@ def data_04_följesedlar(följesedlar_data, file_list, butikskod_serie_map):
             matching_file = next(
                 (f for f in file_list if target_file_partial in f), None
             )
+            
+
 
             if not matching_file:
                 print(
@@ -993,3 +1007,11 @@ def format_kassa_id(kassa_id):
         return f"0{kassa_id}"
     else:
         return str(kassa_id)
+
+def format_sales_date(sales_date):
+    
+    # Parse the combined date and time string into a datetime object
+    date_obj = datetime.strptime(sales_date, "%d/%m/%Y")
+    
+    # Format the datetime object into the desired format: YYMMDD_HHMM
+    return date_obj.strftime("%y%m%d")
