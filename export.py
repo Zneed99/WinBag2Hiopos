@@ -462,7 +462,7 @@ def data_04_följesedlar(följesedlar_data, file_list, butikskod_serie_map):
             target_file_partial = f"{target_file}"
             matching_file = next(
                 (f for f in file_list if target_file_partial in f), None
-            )
+            ) 
             
 
             if not matching_file:
@@ -654,6 +654,7 @@ def data_06(försäljning_data, file_list, butikskod_serie_map):
             säljare,
             moms,
         ]
+        
         file_data[matching_file].append(mapped_row_06)
 
     # Write each set of rows to its corresponding file
@@ -698,7 +699,7 @@ def data_08(försäljning_data, file_list, butikskod_serie_map):
         moms = row["Moms"].replace("%", "00").replace(" ", "")
         varugrupp = row["Varugruppskod"]
         if varugrupp and not math.isnan(float(varugrupp)):
-            varugrupp = int(float(varugrupp))
+            varugrupp = int(float(varugrupp)) 
         else:
             # Handle the NaN case appropriately
             varugrupp = "NaN"  # or another default value or action
@@ -746,7 +747,9 @@ def data_08(försäljning_data, file_list, butikskod_serie_map):
                 format_value_as_integer_string(data["total_pris"]),  # Total price
                 moms,  # Format moms with commas
             ]
-            rows.append(mapped_row_08)
+
+            if varugrupp != "NaN":
+                rows.append(mapped_row_08)
 
         # Write the aggregated rows to the corresponding file
         with open(target_file, "a") as f:
