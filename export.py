@@ -317,10 +317,9 @@ def data_03(försäljning_data, file_list):
 def data_04(betalsätt_data, file_list, presentkort_sålda, butikskod_serie_map):
     file_data = {}  # To store rows for each matching file
     betalmedel_sums = {}  # Store sums for each matching file and betalmedel
-    processed_betalmedel_for_number = (
-        {}
-    )  # Track processed betalmedel per file and number
+    processed_betalmedel_for_number = {}  # Track processed betalmedel per file and number
     suffix_mapping = {}  # Store the Bokföringssuffix for each betalmedel per file
+    unique_belopp_per_receipt = {}  # Track unique belopp per (number, betalmedel, kreditbelopp)
 
     # Preprocess presentkort_sålda for easy lookup
     presentkort_sålda_data = {}
@@ -335,9 +334,7 @@ def data_04(betalsätt_data, file_list, presentkort_sålda, butikskod_serie_map)
                     presentkort_sålda_data[betalmedel] = 0
                 presentkort_sålda_data[betalmedel] += belopp
     else:
-        print(
-            "Warning: 'Presentkort_sold.csv' data is missing. Skipping presentkort_sold processing."
-        )
+        print("Warning: 'Presentkort_sold.csv' data is missing. Skipping presentkort_sold processing.")
 
     for _, row in betalsätt_data.iterrows():
         serie = row["Serie"]
@@ -358,9 +355,7 @@ def data_04(betalsätt_data, file_list, presentkort_sålda, butikskod_serie_map)
         matching_file = next((f for f in file_list if target_file_partial in f), None)
 
         if not matching_file:
-            print(
-                f"Warning: Target file {target_file_partial} not found in file_list. Skipping row."
-            )
+            print(f"Warning: Target file {target_file_partial} not found in file_list. Skipping row.")
             continue
 
         if matching_file not in file_data:
@@ -368,6 +363,7 @@ def data_04(betalsätt_data, file_list, presentkort_sålda, butikskod_serie_map)
             betalmedel_sums[matching_file] = {}
             processed_betalmedel_for_number[matching_file] = {}
             suffix_mapping[matching_file] = {}
+            unique_belopp_per_receipt[matching_file] = set()
 
         if number not in processed_betalmedel_for_number[matching_file]:
             processed_betalmedel_for_number[matching_file][number] = set()
@@ -377,38 +373,29 @@ def data_04(betalsätt_data, file_list, presentkort_sålda, butikskod_serie_map)
             suffix_mapping[matching_file][betalmedel] = bokföringssuffix
 
         # Add presentkort_sålda belopp to the betalmedel as debet
-        # Add presentkort_sålda belopp to the betalmedel as debet
         if betalmedel in presentkort_sålda_data:
             if betalmedel not in betalmedel_sums[matching_file]:
                 betalmedel_sums[matching_file][betalmedel] = {"debet": 0, "kredit": 0}
+            betalmedel_sums[matching_file][betalmedel]["debet"] += presentkort_sålda_data[betalmedel]
 
-                betalmedel_sums[matching_file][betalmedel][
-                    "debet"
-                ] += presentkort_sålda_data[betalmedel]
+        # Define unique key to prevent duplicate belopp summing
+        unique_key = (number, betalmedel, kreditbelopp)
 
-        # Handle sums based on the row's document type
-        if betalmedel not in processed_betalmedel_for_number[matching_file][number]:
+        # Ensure the unique key is only counted once per receipt
+        if unique_key not in unique_belopp_per_receipt[matching_file]:
+            if betalmedel not in betalmedel_sums[matching_file]:
+                betalmedel_sums[matching_file][betalmedel] = {"debet": 0, "kredit": 0}
+
             if kod_dokumenttyp == 1:
-                if betalmedel not in betalmedel_sums[matching_file]:
-                    betalmedel_sums[matching_file][betalmedel] = {
-                        "debet": 0,
-                        "kredit": 0,
-                    }
-
                 betalmedel_sums[matching_file][betalmedel]["debet"] += debetbelopp
-
             elif kod_dokumenttyp == 3:
-                if betalmedel not in betalmedel_sums[matching_file]:
-                    betalmedel_sums[matching_file][betalmedel] = {
-                        "debet": 0,
-                        "kredit": 0,
-                    }
-                betalmedel_sums[matching_file][betalmedel]["kredit"] += abs(
-                    kreditbelopp
-                )
+                betalmedel_sums[matching_file][betalmedel]["kredit"] += abs(kreditbelopp)
 
-            # Mark this betalmedel as processed for the current number
-            processed_betalmedel_for_number[matching_file][number].add(betalmedel)
+            # Mark this unique_key as processed
+            unique_belopp_per_receipt[matching_file].add(unique_key)
+
+        # Mark this betalmedel as processed for the current number
+        processed_betalmedel_for_number[matching_file][number].add(betalmedel)
 
     # Add the "04" rows based on stored sums for each matching file
     for matching_file, sums_per_file in betalmedel_sums.items():
