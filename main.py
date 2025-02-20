@@ -11,7 +11,6 @@ from watchdog.events import FileSystemEventHandler
 from export import export_action
 from import_ import import_action
 
-
 def move_files_to_old_folder(file_paths, folder_to_watch):
     old_folder_path = os.path.join("C:/winbag_export", "Old Files")
     if not os.path.exists(old_folder_path):
@@ -30,13 +29,11 @@ def move_files_to_old_folder(file_paths, folder_to_watch):
         shutil.move(file_path, old_file_path)
         print(f"Moved {file_name} to 'Old Files' as {new_file_name}.")
 
-
 def extract_date_from_filename(filename):
     match = re.search(r"Försäljning_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})", filename)
     if match:
         return match.group(1)
     return None
-
 
 def custom_export_action(file_paths, folder_to_watch):
     try:
@@ -47,7 +44,6 @@ def custom_export_action(file_paths, folder_to_watch):
         tb = traceback.format_exc()
         print(f"An error occurred during export_action:\n{tb}")
 
-
 def custom_import_action(file_path, folder_to_watch):
     try:
         print("Performing import...")
@@ -57,12 +53,12 @@ def custom_import_action(file_path, folder_to_watch):
         tb = traceback.format_exc()
         print(f"An error occurred during import_action: {tb}")
 
-
 class FileRenameHandler(FileSystemEventHandler):
     def __init__(
-        self, folder_to_watch, export_required_keywords, import_required_keyword
+        self, export_folder, import_folder, export_required_keywords, import_required_keyword
     ):
-        self.folder_to_watch = folder_to_watch
+        self.export_folder = export_folder
+        self.import_folder = import_folder
         self.mandatory_keywords = [
             kw
             for kw in export_required_keywords
@@ -72,39 +68,37 @@ class FileRenameHandler(FileSystemEventHandler):
         self.import_required_keyword = import_required_keyword
         print(f"Initialized FileRenameHandler instance: {id(self)}")
 
-    def _find_files_with_keywords(self, keywords):
-        current_files = os.listdir(self.folder_to_watch)
+    def _find_files_with_keywords(self, folder, keywords):
+        current_files = os.listdir(folder)
         matching_files = []
         for file in current_files:
             if any(keyword in file for keyword in keywords):
-                matching_files.append(os.path.join(self.folder_to_watch, file))
+                matching_files.append(os.path.join(folder, file))
         return matching_files
 
     def _all_mandatory_files_present(self):
-        matching_files = self._find_files_with_keywords(self.mandatory_keywords)
+        matching_files = self._find_files_with_keywords(self.export_folder, self.mandatory_keywords)
         print(f"Matching mandatory files: {matching_files}")
         return len(matching_files) >= len(self.mandatory_keywords)
 
     def _get_optional_files(self):
-        return self._find_files_with_keywords(self.optional_keywords)
+        return self._find_files_with_keywords(self.export_folder, self.optional_keywords)
 
     def _is_import_file_present(self):
         return any(
             self.import_required_keyword in file
-            for file in os.listdir(self.folder_to_watch)
+            for file in os.listdir(self.import_folder)
         )
 
     def _process_files(self):
         if self._is_import_file_present():
-            import_files = self._find_files_with_keywords(
-                [self.import_required_keyword]
-            )
+            import_files = self._find_files_with_keywords(self.import_folder, [self.import_required_keyword])
             for file_path in import_files:
                 print(f"Detected PCS file: {file_path}. Starting import action.")
-                custom_import_action([file_path], self.folder_to_watch)
+                custom_import_action([file_path], self.import_folder)
 
         elif self._all_mandatory_files_present():
-            mandatory_files = self._find_files_with_keywords(self.mandatory_keywords)
+            mandatory_files = self._find_files_with_keywords(self.export_folder, self.mandatory_keywords)
             optional_files = self._get_optional_files()
             file_paths = mandatory_files + optional_files
 
@@ -118,7 +112,7 @@ class FileRenameHandler(FileSystemEventHandler):
                 print(f"Including optional files: {optional_files}")
 
             print("Detected all required export files. Starting export action.")
-            custom_export_action(file_paths, self.folder_to_watch)
+            custom_export_action(file_paths, self.export_folder)
         else:
             print("Waiting for PCS or all required export files...")
 
@@ -127,17 +121,19 @@ class FileRenameHandler(FileSystemEventHandler):
             print(f"File added: {event.src_path}")
             self._process_files()
 
-
-def monitor_folder(folder_to_watch, export_required_keywords, import_required_keyword):
+def monitor_folders(export_folder, import_folder, export_required_keywords, import_required_keyword):
     event_handler = FileRenameHandler(
-        folder_to_watch=folder_to_watch,
+        export_folder=export_folder,
+        import_folder=import_folder,
         export_required_keywords=export_required_keywords,
         import_required_keyword=import_required_keyword,
     )
     observer = Observer()
-    observer.schedule(event_handler, folder_to_watch, recursive=False)
+    observer.schedule(event_handler, export_folder, recursive=False)
+    observer.schedule(event_handler, import_folder, recursive=False)
     observer.start()
-    print(f"Monitoring folder: {folder_to_watch}")
+    print(f"Monitoring export folder: {export_folder}")
+    print(f"Monitoring import folder: {import_folder}")
 
     try:
         while True:
@@ -147,24 +143,19 @@ def monitor_folder(folder_to_watch, export_required_keywords, import_required_ke
         print("Stopped monitoring.")
     observer.join()
 
-
 if __name__ == "__main__":
-    folder_to_watch = "C:/winbag_export/Input_Files_Here"
+    export_folder = "C:/winbag_export/Input_Files_Here"
+    import_folder = "C:/winbag_export"
     export_required_keywords = ["Försäljning", "Betalsätt", "Följesedlar", "Moms"]
     import_required_keyword = "PCS.ADM"
 
-    if os.path.exists(folder_to_watch):
-        print(f"Monitoring folder: {folder_to_watch}")
-        monitor_folder(
-            folder_to_watch, export_required_keywords, import_required_keyword
-        )
+    if os.path.exists(export_folder) and os.path.exists(import_folder):
+        monitor_folders(export_folder, import_folder, export_required_keywords, import_required_keyword)
     else:
-        print(f"The specified folder does not exist: {folder_to_watch}. Creating it...")
+        print("One or both specified folders do not exist. Creating missing folders...")
         try:
-            os.makedirs(folder_to_watch)
-            print(f"Created folder: {folder_to_watch}")
-            monitor_folder(
-                folder_to_watch, export_required_keywords, import_required_keyword
-            )
+            os.makedirs(export_folder, exist_ok=True)
+            os.makedirs(import_folder, exist_ok=True)
+            monitor_folders(export_folder, import_folder, export_required_keywords, import_required_keyword)
         except Exception as e:
-            print(f"Failed to create folder {folder_to_watch}. Error: {e}")
+            print(f"Failed to create folders. Error: {e}")

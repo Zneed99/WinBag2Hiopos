@@ -216,7 +216,7 @@ def data_01_02(följesedlar_data, file_list, butikskod_serie_map):
             # Create the "01" row (unique per "Nummer")
             first_row = group.iloc[0]
             shop_id = first_row["ButikskodWinbag"]  
-            print(f"Shop ID: {shop_id}")
+            #print(f"Shop ID: {shop_id}")
             customer_id = first_row["Kundkod"]
             date = first_row["Dok.datum"]
             date = datetime.strptime(date, "%d/%m/%Y").strftime("%Y-%m-%d")
@@ -442,7 +442,7 @@ def data_04_följesedlar(följesedlar_data, file_list, butikskod_serie_map):
             debetbelopp = pris_value if pris_value > 0 else 0.0
             kreditbelopp = abs(pris_value) if pris_value < 0 else 0.0
 
-            print(f"Debet: {debetbelopp}, Kredit: {kreditbelopp}")
+            #print(f"Debet: {debetbelopp}, Kredit: {kreditbelopp}")
 
             # Find the matching file in file_list
             target_file = map_serie_to_file_name(serie, butikskod_serie_map)
