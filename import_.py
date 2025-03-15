@@ -1,6 +1,7 @@
 import os
 import time
 import pytz
+import csv
 from datetime import datetime
 
 
@@ -60,7 +61,10 @@ def import_action(file_paths):
                 if not clean_line:
                     continue  # skip empty lines
 
-                row = clean_line.split(",")
+                #row = clean_line.split(",")
+
+                reader = csv.reader([clean_line], delimiter=",", quotechar='"')
+                row = next(reader)
 
                 # We need at least one column to proceed
                 if not row:
@@ -130,7 +134,7 @@ def transform_01_11(row):
     desc = row[6].strip('"')
 
     # Build the final string, semicolon-delimited
-    return f"{tf_value} ; {code} ; {name} ; {address} ; {desc}"
+    return f"{tf_value};{code};{name};{address};{desc}"
 
 
 def transform_02_22(row):
@@ -164,7 +168,7 @@ def transform_02_22(row):
     price_2 = row[10].strip('"').replace("00", "").lstrip("0") or "0"
 
     # Build the final string, semicolon-delimited
-    return f"{code} ; {name} ; {value_1} ; {value_2} ; {price} ; {tf_value}"
+    return f"{code};{name};{value_1};{value_2};{price};{tf_value}"
 
 
 def transform_huvudgrupp(row):
@@ -184,7 +188,7 @@ def transform_huvudgrupp(row):
     name = row[6].strip('"')
 
     # Build the final string, semicolon-delimited
-    return f"{huvudgrupp_code} ; {name}"
+    return f"{huvudgrupp_code};{name}"
 
 
 def transform_varugrupp(row):
@@ -203,4 +207,4 @@ def transform_varugrupp(row):
     name = row[6].strip('"')
 
     # Build the final string, semicolon-delimited
-    return f"{huvudgrupp_code} ; {varugrupp_code} ; {name}"
+    return f"{huvudgrupp_code};{varugrupp_code};{name}"
