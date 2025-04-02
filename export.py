@@ -35,7 +35,12 @@ def export_action(file_paths):
         # ]
 
         elif "Betalsätt" in file_name:
-            betalsätt_data = pd.read_csv(file_path, sep=";", encoding="ISO-8859-1")
+            betalsätt_data = pd.read_csv(
+                file_path,
+                sep=";",
+                encoding="ISO-8859-1",
+                dtype={"Belopp": str}  # 👈 this preserves "1.490" as string
+            )
 
         #     betalsätt_data.columns = [
         #     col.encode("latin1").decode("utf-8") for col in betalsätt_data.columns
@@ -344,9 +349,16 @@ def data_04(betalsätt_data, file_list, presentkort_sålda, butikskod_serie_map)
         # 04 Mapped values
         konto = row["Dok.Id"]
         betalmedel = row["Betalmedel"]
-        belopp_value = str(row["Belopp"]).replace(".", "")
-        debetbelopp = float(belopp_value.replace(",", "."))
-        kreditbelopp = float(belopp_value.replace(",", "."))
+        #print(f"Belopp from file: {row['Belopp']}")
+        #belopp_value = str(row["Belopp"])
+        #print(f"Belopp value when formatted: {belopp_value}")
+        # debetbelopp = float(belopp_value.replace(",", "."))
+        # kreditbelopp = float(belopp_value.replace(",", "."))
+        #print(f"Raw Belopp: {row['Belopp']} ({type(row['Belopp'])})")
+        debetbelopp = smart_parse_amount(row["Belopp"])
+        kreditbelopp = smart_parse_amount(row["Belopp"])
+
+
         bokföringssuffix = row["Bokföringssuffix"]
 
         # Find the matching file in file_list
@@ -388,6 +400,12 @@ def data_04(betalsätt_data, file_list, presentkort_sålda, butikskod_serie_map)
 
             if kod_dokumenttyp == 1:
                 betalmedel_sums[matching_file][betalmedel]["debet"] += debetbelopp
+                #print(f"Betalmedel: {betalmedel}")
+                # if betalmedel == "KORT":
+                #     print(f"Betalmedel: {betalmedel}, Debet: {debetbelopp}, Kredit: {kreditbelopp}")
+                #     print(f"Total value every iteration: {betalmedel_sums[matching_file][betalmedel]["debet"]}")
+                # if betalmedel == "SWISH":
+                #     print(f"Betalmedel: {betalmedel}, Debet: {debetbelopp}, Kredit: {kreditbelopp}")
             elif kod_dokumenttyp == 3:
                 betalmedel_sums[matching_file][betalmedel]["kredit"] += abs(kreditbelopp)
 
@@ -401,8 +419,10 @@ def data_04(betalsätt_data, file_list, presentkort_sålda, butikskod_serie_map)
     for matching_file, sums_per_file in betalmedel_sums.items():
         for betalmedel, sums in sums_per_file.items():
             konto = suffix_mapping[matching_file][betalmedel]
+            #print(f"Before formatting - Debet: {sums["debet"]}, Kredit: {sums["kredit"]}")
             debetbelopp = format_value_as_integer_string(sums["debet"])
             kreditbelopp = format_value_as_integer_string(sums["kredit"])
+            #print(f"After formatting - Debet: {debetbelopp}, Kredit: {kreditbelopp}")
             mapped_row_04 = [
                 "04",
                 konto,
@@ -435,8 +455,9 @@ def data_04_följesedlar(följesedlar_data, file_list, butikskod_serie_map):
 
             # 04 Mapped values
             konto = row["Dok.Id"]
-            pris_value = float(row["Netto"].replace(".", "").replace(",", "."))
+            #pris_value = float(row["Netto"].replace(".", "").replace(",", "."))
 
+            pris_value = smart_parse_amount(row["Netto"])
 
             # Determine debet and kredit for positive antal
             debetbelopp = pris_value if pris_value > 0 else 0.0
@@ -1003,3 +1024,33 @@ def format_sales_date(sales_date):
     
     # Format the datetime object into the desired format: YYMMDD_HHMM
     return date_obj.strftime("%y%m%d")
+
+def smart_parse_amount(amount):
+    """Parses strings like '1.490', '1,490', '1490', etc. intelligently."""
+    s = str(amount).strip()
+
+    # European style: comma as decimal separator
+    if "," in s:
+        return float(s.replace(".", "").replace(",", "."))
+
+    # Dot is present
+    elif "." in s:
+        parts = s.split(".")
+        if len(parts[-1]) == 3 and len(parts[0]) <= 3:
+            # Dot is probably a thousands separator: '1.490' → 1490
+            return float(s.replace(".", ""))
+        elif len(parts[-1]) == 2:
+            # Looks like decimal part: '1.49' → 1.49
+            return float(s)
+        else:
+            # Defensive fallback
+            try:
+                return float(s)
+            except ValueError:
+                print(f"⚠️ Failed to parse amount: {s}")
+                return 0.0
+
+    # No dot or comma — just a raw number
+    return float(s)
+
+
