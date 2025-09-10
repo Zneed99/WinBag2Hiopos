@@ -60,7 +60,7 @@ def export_action(file_paths):
 
         elif "Moms" in file_name:
             moms_data = pd.read_csv(
-                file_path, sep=";", dtype={"Totalbelopp": str}, encoding="ISO-8859-1"
+                file_path, sep=";", dtype={"Totalbelopp": str, "Basbelopp": str}, encoding="ISO-8859-1"
             )
 
         #     moms_data.columns = [
@@ -72,9 +72,9 @@ def export_action(file_paths):
                 file_path, sep=";", dtype={"Belopp": str}, encoding="ISO-8859-1"
             )
 
-            presentkort_data.columns = [
-                col.encode("latin1").decode("utf-8") for col in presentkort_data.columns
-            ]
+            # presentkort_data.columns = [
+            #     col.encode("latin1").decode("utf-8") for col in presentkort_data.columns
+            # ]
 
         elif "Presentkort_sold" in file_name:
             presentkort_sålda_data = pd.read_csv(
@@ -158,7 +158,6 @@ def create_resulting_files(forsäljning_data, target_folder, butikskod_serie_map
 
     return created_files
 
-
 def map_serie_to_file_name(serie_value, butikskod_serie_map):
     """
     Map the 'Serie' value to its corresponding 'Butikskod' key based on the map.
@@ -182,7 +181,6 @@ def map_serie_to_file_name(serie_value, butikskod_serie_map):
 
     return f"{butikskod_value}"
 
-
 def data_00(file_list):
     header_row = ["00", "20250111_001", "1.0.0"]
 
@@ -191,7 +189,6 @@ def data_00(file_list):
         with open(target_file, "a") as f:
             quoted_row = [f'"{value}"' for value in header_row]
             f.write(",".join(quoted_row) + "\n")
-
 
 def data_01_02(följesedlar_data, file_list, butikskod_serie_map):
     file_data = {}
@@ -299,7 +296,6 @@ def data_01_02(följesedlar_data, file_list, butikskod_serie_map):
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
 
-
 def data_03(försäljning_data, file_list):
 
     for _, row in försäljning_data.iterrows():
@@ -317,7 +313,6 @@ def data_03(försäljning_data, file_list):
         with open(target_file, "a") as f:
             quoted_row = [f'"{value}"' for value in mapped_row_03]
             f.write(",".join(quoted_row) + "\n")
-
 
 def data_04(betalsätt_data, file_list, presentkort_sålda, butikskod_serie_map):
     file_data = {}  # To store rows for each matching file
@@ -440,7 +435,6 @@ def data_04(betalsätt_data, file_list, presentkort_sålda, butikskod_serie_map)
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
 
-
 def data_04_följesedlar(följesedlar_data, file_list, butikskod_serie_map):
     file_data = {}  # To store rows for each matching file
     sums_per_file = {}  # Store sums for each matching file
@@ -524,7 +518,6 @@ def data_04_följesedlar(följesedlar_data, file_list, butikskod_serie_map):
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
 
-
 def data_04_presentkort(presentkort_data, file_list, serie_butikskod_map):
     file_data = {}
     sums_per_file = {}
@@ -532,9 +525,14 @@ def data_04_presentkort(presentkort_data, file_list, serie_butikskod_map):
 
     if presentkort_data is not None:
         for _, row in presentkort_data.iterrows():
+            #print(F"Processing row: {row.to_dict()}")
             butikskod = row["Butikskod"]
 
+            #print(f"Processing butikskod: {butikskod}")
+            #print(f"Serie to butikskod map: {serie_butikskod_map}")
+
             serie = serie_butikskod_map.get(butikskod)
+            #print(f"Serie: {serie}")
             presentkortskonto = row["Presentkortskonto"]
 
             # Extract transaction type and value
@@ -546,7 +544,9 @@ def data_04_presentkort(presentkort_data, file_list, serie_butikskod_map):
             negative_value = pris_value if typ_av_transaktion == 2 else 0.0
 
             # Find the matching file in file_list
+            #print(f"Butikskod serie: {serie_butikskod_map}, Serie: {serie}")
             target_file = map_serie_to_file_name(serie, serie_butikskod_map)
+            #print(F"Target file: {target_file}")
             target_file_partial = f"{target_file}"
             matching_file = next(
                 (f for f in file_list if target_file_partial in f), None
@@ -600,7 +600,6 @@ def data_04_presentkort(presentkort_data, file_list, serie_butikskod_map):
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
 
-
 def data_05(försäljning_data, file_list):
 
     for _, row in försäljning_data.iterrows():
@@ -619,7 +618,6 @@ def data_05(försäljning_data, file_list):
             quoted_row = [f'"{value}"' for value in mapped_row_05]
             f.write(",".join(quoted_row) + "\n")
 
-
 def data_06(försäljning_data, file_list, butikskod_serie_map):
     file_data = {}  # Dictionary to store rows per matching file
 
@@ -627,6 +625,7 @@ def data_06(försäljning_data, file_list, butikskod_serie_map):
         # Mapped values
         serie = row["Serie"]
         artikelNr = row["Referens"]
+        #print(F"Processing artikelNr: {artikelNr}")
         antal = row["Enh.1"]
         pris = row["Pris "]  # Price is correct as-is
         tid = format_time(row["Timme"])  # Keep format_time function for formatting
@@ -651,6 +650,7 @@ def data_06(försäljning_data, file_list, butikskod_serie_map):
         # Negate the quantity for "Sale receipt return"
         if kod_doktyp == 3:
             antal = -antal
+            #print(f"Negated quantity for Sale receipt return: {antal}")
 
         # Add the row to the corresponding file's data
         mapped_row_06 = [
@@ -662,6 +662,8 @@ def data_06(försäljning_data, file_list, butikskod_serie_map):
             säljare,
             moms,
         ]
+
+        #print(f"Mapped row 06: {mapped_row_06}")
         
         file_data[matching_file].append(mapped_row_06)
 
@@ -672,7 +674,6 @@ def data_06(försäljning_data, file_list, butikskod_serie_map):
                 # Add quotes around each value
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
-
 
 def data_07(försäljning_data, file_list):
 
@@ -691,7 +692,6 @@ def data_07(försäljning_data, file_list):
             quoted_row = [f'"{value}"' for value in mapped_row_07]
             f.write(",".join(quoted_row) + "\n")
 
-
 def data_08(försäljning_data, file_list, butikskod_serie_map):
     file_data = {}
 
@@ -701,6 +701,7 @@ def data_08(försäljning_data, file_list, butikskod_serie_map):
     for _, row in försäljning_data.iterrows():
         serie = row["Serie"]
         antal = int(row["Enh.1"])  # Convert Enh.1 to integer
+    
         pris = float(
             row["Netto"].replace(".", "").replace(",", ".")
         )  # Handle formatting for Netto
@@ -765,7 +766,6 @@ def data_08(försäljning_data, file_list, butikskod_serie_map):
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
 
-
 def data_09(försäljning_data, file_list):
 
     for _, row in försäljning_data.iterrows():
@@ -782,7 +782,6 @@ def data_09(försäljning_data, file_list):
         with open(target_file, "a") as f:
             quoted_row = [f'"{value}"' for value in mapped_row_09]
             f.write(",".join(quoted_row) + "\n")
-
 
 def data_10(försäljning_data, file_list, butikskod_serie_map):
     file_data = {}
@@ -850,7 +849,6 @@ def data_10(försäljning_data, file_list, butikskod_serie_map):
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
 
-
 def data_11(försäljning_data, file_list, butikskod_serie_map):
 
     file_data = {}
@@ -883,7 +881,6 @@ def data_11(försäljning_data, file_list, butikskod_serie_map):
             quoted_row = [f'"{value}"' for value in mapped_row_11]
             f.write(",".join(quoted_row) + "\n")
 
-
 def data_12(moms_data, file_list, serie_butikskod_map):
     file_data = {}  # Dictionary to store rows for each matching file
 
@@ -897,6 +894,8 @@ def data_12(moms_data, file_list, serie_butikskod_map):
                 f"Warning: Butikskod {butikskod} not found in serie_butikskod_map. Skipping row."
             )
             continue
+
+        #print(F"Processing row {row.to_dict()} for serie {serie}")
 
         # Mapped values
         moms = row["Moms"].replace("%", "00").replace(" ", "")
@@ -941,7 +940,6 @@ def data_12(moms_data, file_list, serie_butikskod_map):
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
 
-
 def data_99(file_list):
     footer_row = ["99"]
 
@@ -951,11 +949,9 @@ def data_99(file_list):
             quoted_row = [f'"{value}"' for value in footer_row]
             f.write(",".join(quoted_row) + "\n")
 
-
 def format_time(tid):
     hour, minute, _ = tid.split(":")
     return f"{hour}{minute}"
-
 
 def create_butikskod_serie_map(forsäljning_data):
     butikskod_serie_map = (
@@ -971,7 +967,6 @@ def create_butikskod_serie_map(forsäljning_data):
 
     return butikskod_serie_map
 
-
 def format_value_as_integer_string(value):
     value_str = str(value).replace(",", ".")  # In case commas are used for decimals
     if "." in value_str:
@@ -984,7 +979,6 @@ def format_value_as_integer_string(value):
         formatted_value = value_str + "00"
 
     return formatted_value
-
 
 def format_antal_as_integer_string(value):
     value_str = str(value).replace(",", ".")  # In case commas are used for decimals
@@ -999,7 +993,6 @@ def format_antal_as_integer_string(value):
 
     return formatted_value
 
-
 def format_rabatt_nr(rabatt_nr):
     if rabatt_nr == 0:
         return "000"
@@ -1009,7 +1002,6 @@ def format_rabatt_nr(rabatt_nr):
         return f"0{rabatt_nr}"
     else:
         return str(rabatt_nr)
-
 
 def format_kassa_id(kassa_id):
     if kassa_id < 10:
