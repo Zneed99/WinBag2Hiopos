@@ -163,12 +163,27 @@ def transform_02_22(row):
     streckkod = row[5].strip('"')
     value_1 = row[6].strip('"')
     value_2 = row[7].strip('"')
-    price = row[8].strip('"').replace("00", "").lstrip("0") or "0"
-    moms = row[9].strip('"').replace("00", "").lstrip("0") or "0"
-    price_2 = row[10].strip('"').replace("00", "").lstrip("0") or "0"
+
+    raw_price = row[8].strip('"').strip()
+    # Convert to integer, divide by 100, or default to "0" if empty/invalid
+    if raw_price.isdigit():
+        price = str(int(raw_price) // 100)
+    else:
+        price = "0"
+
+    raw_price_2 = row[10].strip('"').strip()
+    if raw_price_2.isdigit():
+        price_2 = str(int(raw_price_2) // 100)
+    else:
+        price_2 = "0"
+
+    #print(f"Name: {name}, Price 2: {price_2}")
+
+
+    moms = row[9].strip('"').replace("00", "", 1).lstrip("0") or "0"
 
     # Build the final string, semicolon-delimited
-    return f"{code};{name};{value_1};{value_2};{price};{tf_value}"
+    return f"{code};{name};{value_1};{value_2};{price};{tf_value};{price_2}"
 
 
 def transform_huvudgrupp(row):
