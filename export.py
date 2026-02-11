@@ -325,7 +325,7 @@ def data_04(betalsätt_data, file_list, presentkort_sålda, butikskod_serie_map)
     presentkort_sålda_data = {}
     if presentkort_sålda is not None:
         for _, row in presentkort_sålda.iterrows():
-            kort = str(row["Kort"])
+            kort = str(row["Kundkortskod"])
             betalmedel = row["Betalmedel"]
             belopp = float(str(row["Belopp"]).replace(".", "").replace(",", "."))
 
