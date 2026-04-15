@@ -78,7 +78,7 @@ class FileRenameHandler(FileSystemEventHandler):
 
     def _all_mandatory_files_present(self):
         matching_files = self._find_files_with_keywords(self.export_folder, self.mandatory_keywords)
-        print(f"Matching mandatory files: {matching_files}")
+        #print(f"Matching mandatory files: {matching_files}")
         return len(matching_files) >= len(self.mandatory_keywords)
 
     def _get_optional_files(self):
@@ -118,7 +118,7 @@ class FileRenameHandler(FileSystemEventHandler):
 
     def on_created(self, event):
         if not event.is_directory:
-            print(f"File added: {event.src_path}")
+            #print(f"File added: {event.src_path}")
             self._process_files()
 
 def monitor_folders(export_folder, import_folder, export_required_keywords, import_required_keyword):

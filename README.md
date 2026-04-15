@@ -52,6 +52,9 @@ cd /d C:\Users
 
 # Columns that are needed in all files for everything to work
 Alla kolumner för försäljning filen:
+* Serie
+* Butikskod
+* ButikskodWinbag
 * KassaId
 * Dok.datum
 * Serie
