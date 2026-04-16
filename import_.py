@@ -177,10 +177,17 @@ def transform_02_22(row):
     else:
         price_2 = "0"
 
-    #print(f"Name: {name}, Price 2: {price_2}")
 
 
     moms = row[9].strip('"').replace("00", "", 1).lstrip("0") or "0"
+
+    new_value1 = row[11].strip('"')
+    new_value2 = row[11].strip('"')
+    new_value3 = row[11].strip('"')
+
+    print(f"New value1: {new_value1}")
+    print(f"New value2: {new_value2}")
+    print(f"New value3: {new_value3}")
 
     # Build the final string, semicolon-delimited
     return f"{code};{name};{value_1};{value_2};{price};{tf_value};{price_2}"
