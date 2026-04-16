@@ -108,7 +108,6 @@ def export_action(file_paths):
 
     file_map = create_resulting_files(forsäljning_data, export_folder)
 
-    # print(f"Serie to butikskod map: {butikskod_serie_map}")
 
     data_00(file_map)
     data_01_02(följesedlar_data, file_map)
@@ -143,7 +142,7 @@ def create_resulting_files(forsäljning_data, target_folder):
     formatted_sales_date = format_sales_date(sales_date)
 
     butikskoder = (
-        forsäljning_data["Butikskod"]
+        forsäljning_data["ButikskodWinbag"]
         .astype(str)
         .str.zfill(2)
         .unique()
@@ -291,8 +290,8 @@ def data_03(försäljning_data, file_map):
 
     for _, row in försäljning_data.iterrows():
 
-        butikskod = row["Butikskod"]
-        matching_file = file_map.get("0" + str(butikskod))
+        butikskod = row["ButikskodWinbag"]
+        matching_file = file_map.get(butikskod)
 
         if not matching_file:
             continue
@@ -592,8 +591,8 @@ def data_05(försäljning_data, file_map):
 
     for _, row in försäljning_data.iterrows():
 
-        butikskod = row["Butikskod"]
-        matching_file = file_map.get("0" + str(butikskod))
+        butikskod = row["ButikskodWinbag"]
+        matching_file = file_map.get(butikskod)
 
         if not matching_file:
             continue
@@ -619,8 +618,8 @@ def data_06(försäljning_data, file_map):
 
     for _, row in försäljning_data.iterrows():
 
-        butikskod = row["Butikskod"]
-        matching_file = file_map.get("0" + str(butikskod))
+        butikskod = row["ButikskodWinbag"]
+        matching_file = file_map.get(butikskod)
 
         if not matching_file:
             continue
@@ -663,8 +662,8 @@ def data_07(försäljning_data, file_map):
 
     for _, row in försäljning_data.iterrows():
 
-        butikskod = row["Butikskod"]
-        matching_file = file_map.get("0" + str(butikskod))
+        butikskod = row["ButikskodWinbag"]
+        matching_file = file_map.get(butikskod)
 
         if not matching_file:
             continue
@@ -691,8 +690,8 @@ def data_08(försäljning_data, file_map):
 
     for _, row in försäljning_data.iterrows():
 
-        butikskod = row["Butikskod"]
-        matching_file = file_map.get("0" + str(butikskod))
+        butikskod = row["ButikskodWinbag"]
+        matching_file = file_map.get(butikskod)
 
         if not matching_file:
             continue
@@ -755,8 +754,8 @@ def data_09(försäljning_data, file_map):
 
     for _, row in försäljning_data.iterrows():
 
-        butikskod = row["Butikskod"]
-        matching_file = file_map.get("0" + str(butikskod))
+        butikskod = row["ButikskodWinbag"]
+        matching_file = file_map.get(butikskod)
 
         if not matching_file:
             continue
@@ -839,8 +838,8 @@ def data_11(försäljning_data, file_map):
 
     for _, row in försäljning_data.iterrows():
 
-        butikskod = row["Butikskod"]
-        matching_file = file_map.get("0" + str(butikskod))
+        butikskod = row["ButikskodWinbag"]
+        matching_file = file_map.get(butikskod)
 
         if not matching_file:
             continue
@@ -867,8 +866,8 @@ def data_12(moms_data, file_map):
 
     for _, row in moms_data.iterrows():
 
-        butikskod = row["Butikskod"]
-        matching_file = file_map.get("0" + str(butikskod))
+        butikskod = row["ButikskodWinbag"]
+        matching_file = file_map.get(butikskod)
 
 
 
