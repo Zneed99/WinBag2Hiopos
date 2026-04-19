@@ -17,8 +17,6 @@ def export_action(file_paths):
     presentkort_sålda_data = None
     time.sleep(1)
 
-    # print(f"Export action started with file paths: {file_paths}")
-
     for file_path in file_paths:
         file_name = os.path.basename(file_path)
 
@@ -26,67 +24,49 @@ def export_action(file_paths):
             forsäljning_data = pd.read_csv(
                 file_path,
                 sep=";",
-                dtype={"Referens": str, "Netto": str, "Varugrupp": str},
+                dtype={"Referens": str, "Netto": str, "Varugrupp": str, "ButikskodWinbag": str},
                 encoding="ISO-8859-1",
             )
-
-        #     forsäljning_data.columns = [
-        #     col.encode("latin1").decode("utf-8") for col in forsäljning_data.columns
-        # ]
 
         elif "Betalsätt" in file_name:
             betalsätt_data = pd.read_csv(
                 file_path,
                 sep=";",
                 encoding="ISO-8859-1",
-                dtype={"Belopp": str}  # 👈 this preserves "1.490" as string
+                dtype={"Belopp": str, "ButikskodWinbag": str}  # 👈 this preserves "1.490" as string
             )
-
-        #     betalsätt_data.columns = [
-        #     col.encode("latin1").decode("utf-8") for col in betalsätt_data.columns
-        # ]
 
         elif "Följesedlar" in file_name:
             följesedlar_data = pd.read_csv(
                 file_path,
                 sep=";",
-                dtype={"Netto": str, "Referens": str},
+                dtype={"Netto": str, "Referens": str, "ButikskodWinbag": str},
                 encoding="ISO-8859-1",
             )
 
-        #     följesedlar_data.columns = [
-        #     col.encode("latin1").decode("utf-8") for col in följesedlar_data.columns
-        # ]
 
         elif "Moms" in file_name:
             moms_data = pd.read_csv(
-                file_path, sep=";", dtype={"Totalbelopp": str, "Basbelopp": str}, encoding="ISO-8859-1"
+                file_path, sep=";", dtype={
+                "Totalbelopp": str,
+                "Basbelopp": str,
+                "ButikskodMomsWinbag": str
+            }, encoding="ISO-8859-1"
             )
 
-        #     moms_data.columns = [
-        #     col.encode("latin1").decode("utf-8") for col in moms_data.columns
-        # ]
 
         elif "Presentkort_used" in file_name:
             presentkort_data = pd.read_csv(
-                file_path, sep=";", dtype={"Belopp": str}, encoding="ISO-8859-1"
+                file_path, sep=";", dtype={"Belopp": str, "ButikskodWinbag": str}, encoding="ISO-8859-1"
             )
-
-            # presentkort_data.columns = [
-            #     col.encode("latin1").decode("utf-8") for col in presentkort_data.columns
-            # ]
 
         elif "Presentkort_sold" in file_name:
             presentkort_sålda_data = pd.read_csv(
                 file_path,
                 sep=";",
-                dtype={"Belopp": str, "Kort": str},
+                dtype={"Belopp": str, "Kort": str, "ButikskodWinbag": str},
                 encoding="ISO-8859-1",
             )
-
-        #     presentkort_sålda_data.columns = [
-        #     col.encode("latin1").decode("utf-8") for col in presentkort_sålda_data.columns
-        # ]
 
     if forsäljning_data is None or betalsätt_data is None or moms_data is None:
         raise ValueError("One or more required files are missing from the file paths.")
@@ -112,9 +92,9 @@ def export_action(file_paths):
     data_00(file_map)
     data_01_02(följesedlar_data, file_map)
     data_03(forsäljning_data, file_map)
-    # data_04(betalsätt_data, file_list, presentkort_sålda_data, butikskod_serie_map)
-    #data_04_följesedlar(följesedlar_data, file_map)
-    # data_04_presentkort(presentkort_data, file_list, butikskod_serie_map)
+    data_04(betalsätt_data, file_map, presentkort_sålda_data)
+    data_04_följesedlar(följesedlar_data, file_map)
+    data_04_presentkort(presentkort_data, file_map)
     data_05(forsäljning_data, file_map)
     data_06(forsäljning_data, file_map)
     data_07(forsäljning_data, file_map)
@@ -296,8 +276,8 @@ def data_03(försäljning_data, file_map):
         if not matching_file:
             continue
 
-        butiks_nr = format_kassa_id(row["ButikskodWinbag"])
-        kassa_nr = format_kassa_id(row["ButikskodWinbag"])
+        butiks_nr = row["ButikskodWinbag"]
+        kassa_nr = row["ButikskodWinbag"]
         raw_datum = row["Dok.datum"]
         datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
@@ -313,7 +293,7 @@ def data_03(försäljning_data, file_map):
             quoted_row = [f'"{value}"' for value in row]
             f.write(",".join(quoted_row) + "\n")
 
-def data_04(betalsätt_data, file_list, presentkort_sålda, butikskod_serie_map):
+def data_04(betalsätt_data, file_map, presentkort_sålda):
     file_data = {}  # To store rows for each matching file
     betalmedel_sums = {}  # Store sums for each matching file and betalmedel
     processed_betalmedel_for_number = {}  # Track processed betalmedel per file and number
@@ -326,7 +306,7 @@ def data_04(betalsätt_data, file_list, presentkort_sålda, butikskod_serie_map)
         for _, row in presentkort_sålda.iterrows():
             kort = str(row["Kundkortskod"])
             betalmedel = row["Betalmedel"]
-            belopp = float(str(row["Belopp"]).replace(".", "").replace(",", "."))
+            belopp = Decimal(str(row["Belopp"]).replace(".", "").replace(",", "."))
 
             if kort != "nan":
                 if betalmedel not in presentkort_sålda_data:
@@ -356,12 +336,11 @@ def data_04(betalsätt_data, file_list, presentkort_sålda, butikskod_serie_map)
         bokföringssuffix = row["Bokföringssuffix"]
 
         # Find the matching file in file_list
-        target_file = map_serie_to_file_name(serie, butikskod_serie_map)
-        target_file_partial = f"{target_file}"
-        matching_file = next((f for f in file_list if target_file_partial in f), None)
+        butikskod = row["ButikskodWinbag"]
+        matching_file = file_map.get(butikskod)
 
         if not matching_file:
-            print(f"Warning: Target file {target_file_partial} not found in file_list. Skipping row.")
+            print(f"Warning: Butikskod {butikskod} not found in file_map. Skipping row.")
             continue
 
         if matching_file not in file_data:
@@ -442,28 +421,30 @@ def data_04_följesedlar(följesedlar_data, file_map):
 
     if följesedlar_data is not None:
         for _, row in följesedlar_data.iterrows():
-            serie = row["Serie"]
             number = row["Nummer"]
             bokföringssuffix = row["Bokföringssuffix"]
 
             konto = row["Dok.Id"]
             pris_value = smart_parse_amount(row["Netto"])
 
-            debetbelopp = pris_value if pris_value > 0 else 0.0
-            kreditbelopp = abs(pris_value) if pris_value < 0 else 0.0
+            debetbelopp = pris_value if pris_value > 0 else Decimal("0")
+            kreditbelopp = abs(pris_value) if pris_value < 0 else Decimal("0")
 
-            # ✅ NEW ROUTING
-            matching_file = file_map.get(serie)
+            butikskod = row["ButikskodWinbag"]
+            matching_file = file_map.get(butikskod)
 
             if not matching_file:
                 print(
-                    f"Warning: Serie {serie} not found in file_map. Skipping row."
+                    f"Warning: Butikskod {butikskod} not found in file_map. Skipping row."
                 )
                 continue
 
             if matching_file not in file_data:
                 file_data[matching_file] = []
-                sums_per_file[matching_file] = {"debet": 0, "kredit": 0}
+                sums_per_file[matching_file] = {
+                    "debet": Decimal("0"),
+                    "kredit": Decimal("0")
+                }
                 processed_numbers_for_file[matching_file] = set()
                 suffix_mapping[matching_file] = None
 
@@ -504,7 +485,7 @@ def data_04_följesedlar(följesedlar_data, file_map):
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
 
-def data_04_presentkort(presentkort_data, file_list, serie_butikskod_map):
+def data_04_presentkort(presentkort_data, file_map):
     file_data = {}
     sums_per_file = {}
     account_mapping = {}
@@ -517,36 +498,32 @@ def data_04_presentkort(presentkort_data, file_list, serie_butikskod_map):
             #print(f"Processing butikskod: {butikskod}")
             #print(f"Serie to butikskod map: {serie_butikskod_map}")
 
-            serie = serie_butikskod_map.get(butikskod)
-            #print(f"Serie: {serie}")
             presentkortskonto = row["Presentkortskonto"]
 
             # Extract transaction type and value
             typ_av_transaktion = row["Kod för kundkortstransaktioner"]
-            pris_value = float(row["Belopp"].replace(".", "").replace(",", "."))
+            pris_value = Decimal(row["Belopp"].replace(".", "").replace(",", "."))
+
 
             # Determine positive_value and negative_value based on transaction type
-            positive_value = abs(pris_value) if typ_av_transaktion == 5 else 0.0
-            negative_value = pris_value if typ_av_transaktion == 2 else 0.0
+            positive_value = abs(pris_value) if typ_av_transaktion == 5 else Decimal("0")
+            negative_value = pris_value if typ_av_transaktion == 2 else Decimal("0")
 
             # Find the matching file in file_list
             #print(f"Butikskod serie: {serie_butikskod_map}, Serie: {serie}")
-            target_file = map_serie_to_file_name(serie, serie_butikskod_map)
-            #print(F"Target file: {target_file}")
-            target_file_partial = f"{target_file}"
-            matching_file = next(
-                (f for f in file_list if target_file_partial in f), None
-            )
+
+            butikskod = row["ButikskodWinbag"]
+            matching_file = file_map.get(butikskod)
 
             if not matching_file:
                 print(
-                    f"Warning: Target file {target_file_partial} not found in file_list. Skipping row."
+                    f"Warning: Target file for butikskod {butikskod} not found in file_map. Skipping row."
                 )
                 continue
 
             if matching_file not in file_data:
                 file_data[matching_file] = []
-                sums_per_file[matching_file] = {"positive": 0, "negative": 0}
+                sums_per_file[matching_file] = {"positive": Decimal("0"), "negative": Decimal("0")}
                 account_mapping[matching_file] = None
 
             # Update sums
@@ -597,8 +574,8 @@ def data_05(försäljning_data, file_map):
         if not matching_file:
             continue
 
-        butiks_nr = format_kassa_id(row["ButikskodWinbag"])
-        kassa_nr = format_kassa_id(row["ButikskodWinbag"])
+        butiks_nr = row["ButikskodWinbag"]
+        kassa_nr = row["ButikskodWinbag"]
         raw_datum = row["Dok.datum"]
         datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
@@ -668,8 +645,8 @@ def data_07(försäljning_data, file_map):
         if not matching_file:
             continue
 
-        butiks_nr = format_kassa_id(row["ButikskodWinbag"])
-        kassa_nr = format_kassa_id(row["ButikskodWinbag"])
+        butiks_nr = row["ButikskodWinbag"]
+        kassa_nr = row["ButikskodWinbag"]
         raw_datum = row["Dok.datum"]
         datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
@@ -760,8 +737,8 @@ def data_09(försäljning_data, file_map):
         if not matching_file:
             continue
 
-        butiks_nr = format_kassa_id(row["ButikskodWinbag"])
-        kassa_nr = format_kassa_id(row["ButikskodWinbag"])
+        butiks_nr = row["ButikskodWinbag"]
+        kassa_nr = row["ButikskodWinbag"]
         raw_datum = row["Dok.datum"]
         datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
@@ -781,8 +758,8 @@ def data_10(försäljning_data, file_map):
 
     for _, row in försäljning_data.iterrows():
 
-        butikskod = row["Butikskod"]
-        matching_file = file_map.get("0" + str(butikskod))
+        butikskod = row["ButikskodWinbag"]
+        matching_file = file_map.get(butikskod)
 
         if not matching_file:
             continue
@@ -844,8 +821,8 @@ def data_11(försäljning_data, file_map):
         if not matching_file:
             continue
 
-        butiks_nr = format_kassa_id(row["ButikskodWinbag"])
-        kassa_nr = format_kassa_id(row["ButikskodWinbag"])
+        butiks_nr = row["ButikskodWinbag"]
+        kassa_nr = row["ButikskodWinbag"]
         raw_datum = row["Dok.datum"]
         datum = datetime.strptime(raw_datum, "%d/%m/%Y").strftime("%Y-%m-%d")
 
@@ -866,7 +843,7 @@ def data_12(moms_data, file_map):
 
     for _, row in moms_data.iterrows():
 
-        butikskod = row["ButikskodWinbag"]
+        butikskod = row["ButikskodMomsWinbag"]
         matching_file = file_map.get(butikskod)
 
 
@@ -955,12 +932,6 @@ def format_rabatt_nr(rabatt_nr):
     else:
         return str(rabatt_nr)
 
-def format_kassa_id(kassa_id):
-    if kassa_id < 10:
-        return f"0{kassa_id}"
-    else:
-        return str(kassa_id)
-
 def format_sales_date(sales_date):
     
     # Parse the combined date and time string into a datetime object
@@ -975,26 +946,26 @@ def smart_parse_amount(amount):
 
     # European style: comma as decimal separator
     if "," in s:
-        return float(s.replace(".", "").replace(",", "."))
+        return Decimal(s.replace(".", "").replace(",", "."))
 
     # Dot is present
     elif "." in s:
         parts = s.split(".")
         if len(parts[-1]) == 3 and len(parts[0]) <= 3:
             # Dot is probably a thousands separator: '1.490' → 1490
-            return float(s.replace(".", ""))
+            return Decimal(s.replace(".", "").replace(",", "."))
         elif len(parts[-1]) == 2:
             # Looks like decimal part: '1.49' → 1.49
-            return float(s)
+            return Decimal(s)
         else:
             # Defensive fallback
             try:
-                return float(s)
+                return Decimal(s)
             except ValueError:
                 print(f"⚠️ Failed to parse amount: {s}")
-                return 0.0
+                return Decimal(0)
 
     # No dot or comma — just a raw number
-    return float(s)
+    return Decimal(s)
 
 
