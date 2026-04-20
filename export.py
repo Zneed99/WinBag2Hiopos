@@ -171,7 +171,6 @@ def data_00(file_map):
             f.write(",".join(quoted_row) + "\n")
 
 def data_01_02(följesedlar_data, file_map):
-    print(f"File map: {file_map}")
     file_data = {}
     current_number = None
 
@@ -207,16 +206,20 @@ def data_01_02(följesedlar_data, file_map):
             butikskod = str(first_row["ButikskodWinbag"]).zfill(2)
 
             matching_file = file_map.get(butikskod)
-            file_data[matching_file] = []
+
+            print(f"Nummer: {number}, butikskod: {butikskod}, file: {matching_file}")
 
             if not matching_file:
                 print(f"Warning: No file found for serie {shop_id}. Skipping group.")
                 continue
 
+            if matching_file not in file_data:
+                file_data[matching_file] = []
+
             mapped_row_01 = [
                 "01",
-                f"0{shop_id}",
-                f"0{shop_id}",
+                f"{shop_id}",
+                f"{shop_id}",
                 customer_id,
                 date,
                 reference,  # Set reference from missing "Referens" row or empty string
@@ -897,14 +900,20 @@ def format_time(tid):
     return f"{hour}{minute}"
 
 def format_value_as_integer_string(value):
-    value_str = str(value).replace(",", ".")  # In case commas are used for decimals
+    value_str = str(value).replace(",", ".")  # convert decimal comma
+
     if "." in value_str:
-        # Remove the decimal and append missing digits if necessary
-        integer_part, decimal_part = value_str.split(".")
-        decimal_part = decimal_part.ljust(2, "0")  # Ensure at least 2 digits
+        parts = value_str.split(".")
+
+        # Join everything except last part = handles thousand separators
+        integer_part = "".join(parts[:-1])
+        decimal_part = parts[-1]
+
+        # Ensure exactly 2 decimal digits
+        decimal_part = decimal_part.ljust(2, "0")[:2]
+
         formatted_value = integer_part + decimal_part
     else:
-        # No decimal point, just add "00"
         formatted_value = value_str + "00"
 
     return formatted_value

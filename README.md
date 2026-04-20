@@ -72,6 +72,7 @@ Alla kolumner för försäljning filen:
 Alla kolumner för betalsätt filen:
 * Serie
 * Nummer
+* ButikskodWinbag
 * Kod för dokumenttyp
 * Dok.Id
 * Betalmedel
@@ -81,6 +82,7 @@ Alla kolumner för betalsätt filen:
 
 Alla kolumner för följesedlar filen:
 * Serie
+* ButikskodWinbag
 * Nummer
 * Bokföringssuffix
 * Dok.Id
@@ -89,12 +91,13 @@ Alla kolumner för följesedlar filen:
 
 Alla kolumner för moms filen:
 * Butikskod
+* ButikskodWinbag
 * Moms
 * Basbelopp
 * Moms_2
 * Totalbelopp
 
-Alla kolumner för presentkort filen:
+Alla kolumner för presentkort used filen:
 * Butikskod
 * Presentkortskonto
 * Kod för kundkortstransaktioner
