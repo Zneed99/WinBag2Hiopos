@@ -207,8 +207,6 @@ def data_01_02(följesedlar_data, file_map):
 
             matching_file = file_map.get(butikskod)
 
-            print(f"Nummer: {number}, butikskod: {butikskod}, file: {matching_file}")
-
             if not matching_file:
                 print(f"Warning: No file found for serie {shop_id}. Skipping group.")
                 continue

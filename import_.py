@@ -150,47 +150,46 @@ def transform_02_22(row):
        row[10] -> "7500"
     """
 
+    mapping = {
+        "2500": "1",
+        "1200": "2",
+        "0600": "3",
+    }
+
     # Safety check: make sure we have enough columns
     if len(row) < 21:
         return ""  # or raise an error/log it
 
     # Determine T or F
-    tf_value = "false" if row[0].strip('"') == "02" else "true"
+    descat = "false" if row[0].strip('"') == "02" else "true"
 
     # Extract columns (strip() to remove accidental whitespace)
-    code = row[3].strip('"')
-    name = row[4].strip('"')
-    streckkod = row[5].strip('"')
-    value_1 = row[6].strip('"')
-    value_2 = row[7].strip('"')
+    item_ref = row[3].strip('"')
+    item_name = row[4].strip('"')
+    department_id = row[6].strip('"')
+    section_id = row[7].strip('"')
 
-    raw_price = row[8].strip('"').strip()
+    sale_price_1_raw = row[8].strip('"').strip()
     # Convert to integer, divide by 100, or default to "0" if empty/invalid
-    if raw_price.isdigit():
-        price = str(int(raw_price) // 100)
+    if sale_price_1_raw.isdigit():
+        sale_price_1 = str(int(sale_price_1_raw) // 100)
     else:
-        price = "0"
+        sale_price_1 = "0"
 
-    raw_price_2 = row[10].strip('"').strip()
-    if raw_price_2.isdigit():
-        price_2 = str(int(raw_price_2) // 100)
+    vat_1 = mapping.get(row[9].strip('"'), "0")
+    price_list_code_1 = 1
+
+    sale_price_2_raw = row[10].strip('"').strip()
+    if sale_price_2_raw.isdigit():
+        sale_price_2 = str(int(sale_price_2_raw) // 100)
     else:
-        price_2 = "0"
+        sale_price_2 = "0"
 
-
-
-    moms = row[9].strip('"').replace("00", "", 1).lstrip("0") or "0"
-
-    new_value1 = row[11].strip('"')
-    new_value2 = row[11].strip('"')
-    new_value3 = row[11].strip('"')
-
-    print(f"New value1: {new_value1}")
-    print(f"New value2: {new_value2}")
-    print(f"New value3: {new_value3}")
+    vat_2 = mapping.get(row[11].strip('"'), "0")
+    price_list_code_2 = 2
 
     # Build the final string, semicolon-delimited
-    return f"{code};{name};{value_1};{value_2};{price};{tf_value};{price_2}"
+    return f"{item_ref};{item_name};{department_id};{section_id};{sale_price_1};{vat_1};{price_list_code_1};{sale_price_2};{vat_2};{price_list_code_2};{descat}"
 
 
 def transform_huvudgrupp(row):
