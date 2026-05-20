@@ -171,19 +171,19 @@ def transform_02_22(row):
 
     sale_price_1_raw = row[8].strip('"').strip()
     # Convert to integer, divide by 100, or default to "0" if empty/invalid
-    if sale_price_1_raw.isdigit():
-        sale_price_1 = str(int(sale_price_1_raw) // 100)
-    else:
-        sale_price_1 = "0"
+    try:
+        sale_price_1 = f"{int(sale_price_1_raw) / 100:.2f}".replace(".", ",")
+    except (ValueError, TypeError):
+        sale_price_1 = "0,00"
 
     vat_1 = mapping.get(row[9].strip('"'), "0")
     price_list_code_1 = 1
 
     sale_price_2_raw = row[10].strip('"').strip()
-    if sale_price_2_raw.isdigit():
-        sale_price_2 = str(int(sale_price_2_raw) // 100)
-    else:
-        sale_price_2 = "0"
+    try:
+        sale_price_2 = f"{int(sale_price_2_raw) / 100:.2f}".replace(".", ",")
+    except (ValueError, TypeError):
+        sale_price_2 = "0,00"
 
     vat_2 = mapping.get(row[11].strip('"'), "0")
     price_list_code_2 = 2
