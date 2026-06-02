@@ -294,54 +294,53 @@ def data_03(försäljning_data, file_map):
             quoted_row = [f'"{value}"' for value in row]
             f.write(",".join(quoted_row) + "\n")
 
-def data_04(betalsätt_data, file_map, presentkort_sålda):
-    file_data = {}  # To store rows for each matching file
-    betalmedel_sums = {}  # Store sums for each matching file and betalmedel
-    processed_betalmedel_for_number = {}  # Track processed betalmedel per file and number
-    suffix_mapping = {}  # Store the Bokföringssuffix for each betalmedel per file
-    unique_belopp_per_receipt = {}  # Track unique belopp per (number, betalmedel, kreditbelopp)
+from decimal import Decimal
 
-    # Preprocess presentkort_sålda for easy lookup
+
+def data_04(betalsätt_data, file_map, presentkort_sålda):
+    file_data = {}
+    betalmedel_sums = {}
+    processed_betalmedel_for_number = {}
+    suffix_mapping = {}
+    unique_belopp_per_receipt = {}
+
+    # ----------------------------
+    # PREPROCESS PRESENTKORT
+    # ----------------------------
     presentkort_sålda_data = {}
+
     if presentkort_sålda is not None:
         for _, row in presentkort_sålda.iterrows():
             kort = str(row["Kundkortskod"])
             betalmedel = row["Betalmedel"]
+
             belopp = Decimal(str(row["Belopp"]).replace(".", "").replace(",", "."))
 
             if kort != "nan":
                 if betalmedel not in presentkort_sålda_data:
-                    presentkort_sålda_data[betalmedel] = 0
-                presentkort_sålda_data[betalmedel] += belopp
-    else:
-        print("Warning: 'Presentkort_sold.csv' data is missing. Skipping presentkort_sold processing.")
+                    presentkort_sålda_data[betalmedel] = Decimal("0")
 
+                presentkort_sålda_data[betalmedel] += belopp
+
+    else:
+        print("Warning: presentkort_sålda missing")
+
+    # ----------------------------
+    # MAIN LOOP
+    # ----------------------------
     for _, row in betalsätt_data.iterrows():
-        serie = row["Serie"]
+
         number = row["Nummer"]
         kod_dokumenttyp = row["Kod för dokumenttyp"]
 
-        # 04 Mapped values
-        konto = row["Dok.Id"]
         betalmedel = row["Betalmedel"]
-        #print(f"Belopp from file: {row['Belopp']}")
-        #belopp_value = str(row["Belopp"])
-        #print(f"Belopp value when formatted: {belopp_value}")
-        # debetbelopp = float(belopp_value.replace(",", "."))
-        # kreditbelopp = float(belopp_value.replace(",", "."))
-        #print(f"Raw Belopp: {row['Belopp']} ({type(row['Belopp'])})")
-        debetbelopp = smart_parse_amount(row["Belopp"])
-        kreditbelopp = smart_parse_amount(row["Belopp"])
-
-
         bokföringssuffix = row["Bokföringssuffix"]
 
-        # Find the matching file in file_list
         butikskod = row["ButikskodWinbag"]
         matching_file = file_map.get(butikskod)
 
         if not matching_file:
-            print(f"Warning: Butikskod {butikskod} not found in file_map. Skipping row.")
+            print(f"Missing file mapping: {butikskod}")
             continue
 
         if matching_file not in file_data:
@@ -354,63 +353,86 @@ def data_04(betalsätt_data, file_map, presentkort_sålda):
         if number not in processed_betalmedel_for_number[matching_file]:
             processed_betalmedel_for_number[matching_file][number] = set()
 
-        # Store the bokföringssuffix for this betalmedel
         if betalmedel not in suffix_mapping[matching_file]:
             suffix_mapping[matching_file][betalmedel] = bokföringssuffix
 
-        # Add presentkort_sålda belopp to the betalmedel as debet
+        # ----------------------------
+        # SAFE PARSING
+        # ----------------------------
+        debetbelopp = smart_parse_amount(row["Belopp"])
+        kreditbelopp = smart_parse_amount(row["Belopp"])
+
+        # DEBUG: catch corruption early
+        # (remove later when stable)
+        # print("RAW:", row["Belopp"], "PARSED:", repr(debetbelopp))
+
+        # ----------------------------
+        # PRESENTKORT ADDITION (SAFE)
+        # ----------------------------
         if betalmedel in presentkort_sålda_data:
             if betalmedel not in betalmedel_sums[matching_file]:
-                betalmedel_sums[matching_file][betalmedel] = {"debet": 0, "kredit": 0}
+                betalmedel_sums[matching_file][betalmedel] = {
+                    "debet": Decimal("0"),
+                    "kredit": Decimal("0")
+                }
+
             betalmedel_sums[matching_file][betalmedel]["debet"] += presentkort_sålda_data[betalmedel]
 
-        # Define unique key to prevent duplicate belopp summing
+        # ----------------------------
+        # UNIQUE KEY LOGIC
+        # ----------------------------
         unique_key = (number, betalmedel, kreditbelopp)
 
-        # Ensure the unique key is only counted once per receipt
         if unique_key not in unique_belopp_per_receipt[matching_file]:
+
             if betalmedel not in betalmedel_sums[matching_file]:
-                betalmedel_sums[matching_file][betalmedel] = {"debet": 0, "kredit": 0}
+                betalmedel_sums[matching_file][betalmedel] = {
+                    "debet": Decimal("0"),
+                    "kredit": Decimal("0")
+                }
 
             if kod_dokumenttyp == 1:
                 betalmedel_sums[matching_file][betalmedel]["debet"] += debetbelopp
-                #print(f"Betalmedel: {betalmedel}")
-                # if betalmedel == "KORT":
-                #     print(f"Betalmedel: {betalmedel}, Debet: {debetbelopp}, Kredit: {kreditbelopp}")
-                #     print(f"Total value every iteration: {betalmedel_sums[matching_file][betalmedel]["debet"]}")
-                # if betalmedel == "SWISH":
-                #     print(f"Betalmedel: {betalmedel}, Debet: {debetbelopp}, Kredit: {kreditbelopp}")
+
             elif kod_dokumenttyp == 3:
                 betalmedel_sums[matching_file][betalmedel]["kredit"] += abs(kreditbelopp)
 
-            # Mark this unique_key as processed
             unique_belopp_per_receipt[matching_file].add(unique_key)
 
-        # Mark this betalmedel as processed for the current number
         processed_betalmedel_for_number[matching_file][number].add(betalmedel)
 
-    # Add the "04" rows based on stored sums for each matching file
+    # ----------------------------
+    # OUTPUT + DEBUG CHECK
+    # ----------------------------
     for matching_file, sums_per_file in betalmedel_sums.items():
+
         for betalmedel, sums in sums_per_file.items():
+
+            print(
+                f"[FINAL CHECK] {matching_file} {betalmedel} "
+                f"debet={repr(sums['debet'])} "
+                f"kredit={repr(sums['kredit'])}"
+            )
+
             konto = suffix_mapping[matching_file][betalmedel]
-            #print(f"Before formatting - Debet: {sums["debet"]}, Kredit: {sums["kredit"]}")
+
             debetbelopp = format_value_as_integer_string(sums["debet"])
             kreditbelopp = format_value_as_integer_string(sums["kredit"])
-            #print(f"After formatting - Debet: {debetbelopp}, Kredit: {kreditbelopp}")
-            mapped_row_04 = [
+
+            file_data[matching_file].append([
                 "04",
                 konto,
                 betalmedel,
                 str(debetbelopp),
                 str(kreditbelopp),
-            ]
-            file_data[matching_file].append(mapped_row_04)
+            ])
 
-    # Write each set of rows to its corresponding file
+    # ----------------------------
+    # WRITE FILES
+    # ----------------------------
     for target_file, rows in file_data.items():
         with open(target_file, "a") as f:
             for row in rows:
-                # Add quotes around each value
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
 
