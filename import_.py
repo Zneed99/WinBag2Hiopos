@@ -1,8 +1,11 @@
 import os
-import time
 import pytz
 import csv
 from datetime import datetime
+
+from logger_setup import get_logger
+
+logger = get_logger(__name__)
 
 
 def import_action(file_paths):
@@ -15,16 +18,17 @@ def import_action(file_paths):
     3) '03' or '33'  --> check 6th column:
        - if empty    --> third output file
        - if not empty -> fourth output file
-    """
-    time.sleep(1)
 
+    The caller (main.py) is responsible for waiting until the source file has
+    finished being written before calling this - see wait_for_file_stable.
+    """
     if not file_paths:
-        print("No file paths provided to import_action.")
+        logger.warning("No file paths provided to import_action.")
         return
 
     pcs_file_path = file_paths[0]
     if not os.path.exists(pcs_file_path):
-        print(f"File does not exist: {pcs_file_path}")
+        logger.error(f"File does not exist: {pcs_file_path}")
         return
 
     # Define output file names in the same directory as pcs_file_path
@@ -33,9 +37,9 @@ def import_action(file_paths):
 
     if not os.path.exists(import_folder):
         os.makedirs(import_folder)
-        print(f"Created 'Imported Files' folder at {import_folder}")
+        logger.info(f"Created 'Imported Files' folder at {import_folder}")
 
-    print(f"Resolved import folder path: {os.path.abspath(import_folder)}")
+    logger.debug(f"Resolved import folder path: {os.path.abspath(import_folder)}")
 
 
     stockholm_tz = pytz.timezone("Europe/Stockholm")
@@ -46,25 +50,41 @@ def import_action(file_paths):
     output3_path = os.path.join(import_folder, f"file_huvudgrupp.{current_time}.csv")
     output4_path = os.path.join(import_folder, f"file_varugrupp.{current_time}.csv")
 
+    # Write to .tmp paths and only rename to the real names once processing
+    # finishes without error. If the process gets interrupted partway through
+    # (crash, kill, restart), this leaves either nothing or an obviously
+    # incomplete .tmp file instead of a silently-truncated "real" output file.
+    final_paths = [output1_path, output2_path, output3_path, output4_path]
+    tmp_paths = [p + ".tmp" for p in final_paths]
+
+    row_counts = {"file_01_11": 0, "file_artiklar": 0, "file_huvudgrupp": 0, "file_varugrupp": 0}
+    skipped_rows = 0
+    unrecognized_codes = {}
+
     try:
         with open(pcs_file_path, "r", encoding="cp1252") as pcs_in, open(
-            output1_path, "w", encoding="cp1252"
-        ) as out1, open(output2_path, "w", encoding="cp1252") as out2, open(
-            output3_path, "w", encoding="cp1252"
+            tmp_paths[0], "w", encoding="cp1252"
+        ) as out1, open(tmp_paths[1], "w", encoding="cp1252") as out2, open(
+            tmp_paths[2], "w", encoding="cp1252"
         ) as out3, open(
-            output4_path, "w", encoding="cp1252"
+            tmp_paths[3], "w", encoding="cp1252"
         ) as out4:
 
-            for line in pcs_in:
+            for line_number, line in enumerate(pcs_in, start=1):
                 # Remove trailing newline/spaces
                 clean_line = line.strip()
                 if not clean_line:
                     continue  # skip empty lines
 
-                #row = clean_line.split(",")
-
-                reader = csv.reader([clean_line], delimiter=",", quotechar='"')
-                row = next(reader)
+                try:
+                    reader = csv.reader([clean_line], delimiter=",", quotechar='"')
+                    row = next(reader)
+                except (csv.Error, StopIteration):
+                    logger.warning(
+                        f"Skipping malformed CSV line {line_number} in {pcs_file_path}: {clean_line!r}"
+                    )
+                    skipped_rows += 1
+                    continue
 
                 # We need at least one column to proceed
                 if not row:
@@ -74,36 +94,72 @@ def import_action(file_paths):
 
                 # 01 / 11 --> file 1
                 if first_value in ("01", "11"):
-                    tranformed_row = transform_01_11(row)
-                    out1.write(tranformed_row + "\n")
+                    tranformed_row = transform_01_11(row, line_number)
+                    if tranformed_row:
+                        out1.write(tranformed_row + "\n")
+                        row_counts["file_01_11"] += 1
+                    else:
+                        skipped_rows += 1
 
                 # 02 / 22 --> file 2
                 elif first_value in ("02", "22"):
-                    tranformed_row = transform_02_22(row)
-                    out2.write(tranformed_row + "\n")
+                    tranformed_row = transform_02_22(row, line_number)
+                    if tranformed_row:
+                        out2.write(tranformed_row + "\n")
+                        row_counts["file_artiklar"] += 1
+                    else:
+                        skipped_rows += 1
 
                 # 03 / 33 --> check the 6th column
                 elif first_value in ("03", "33"):
                     if len(row) >= 6 and row[5].strip('"'):
                         # There's a value in the 6th column
-                        transformed_row = transform_varugrupp(row)
-                        out4.write(transformed_row + "\n")
+                        transformed_row = transform_varugrupp(row, line_number)
+                        if transformed_row:
+                            out4.write(transformed_row + "\n")
+                            row_counts["file_varugrupp"] += 1
+                        else:
+                            skipped_rows += 1
                     else:
                         # The 6th column is empty or doesn't exist
-                        transformed_row = transform_huvudgrupp(row)
-                        out3.write(transformed_row + "\n")
+                        transformed_row = transform_huvudgrupp(row, line_number)
+                        if transformed_row:
+                            out3.write(transformed_row + "\n")
+                            row_counts["file_huvudgrupp"] += 1
+                        else:
+                            skipped_rows += 1
 
-                else:
-                    # Passes 00 and 99
+                elif first_value in ("00", "99"):
                     pass
 
-        print("import_action completed successfully.")
+                else:
+                    unrecognized_codes[first_value] = unrecognized_codes.get(first_value, 0) + 1
 
-    except Exception as e:
-        print(f"An error occurred in import_action: {e}")
+        # Only now that every line has been processed without error do the
+        # output files get their real names - see comment above on tmp_paths.
+        for tmp_path, final_path in zip(tmp_paths, final_paths):
+            os.replace(tmp_path, final_path)
+
+        logger.info(
+            f"import_action completed successfully for {pcs_file_path}. "
+            f"Rows written: {row_counts}. Skipped/malformed rows: {skipped_rows}."
+        )
+        if unrecognized_codes:
+            logger.warning(
+                f"Encountered unrecognized row codes in {pcs_file_path}: {unrecognized_codes}"
+            )
+
+    except Exception:
+        logger.exception(f"An error occurred in import_action for {pcs_file_path}")
+        for tmp_path in tmp_paths:
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                logger.warning(f"Could not remove incomplete temp file {tmp_path}")
 
 
-def transform_01_11(row):
+def transform_01_11(row, line_number=None):
     """
     Given a row like:
        row[0] -> "01" or "11"
@@ -120,7 +176,10 @@ def transform_01_11(row):
 
     # Safety check: make sure we have enough columns
     if len(row) < 7:
-        return ""  # or raise an error/log it
+        logger.warning(
+            f"Skipping 01/11 row at line {line_number}: expected at least 7 columns, got {len(row)}: {row}"
+        )
+        return ""
 
     # print(f"First value: {row[0]}")
 
@@ -137,7 +196,7 @@ def transform_01_11(row):
     return f"{tf_value};{code};{name};{address};{desc}"
 
 
-def transform_02_22(row):
+def transform_02_22(row, line_number=None):
     """
     Given a row like:
        row[0] -> "02" or "22"
@@ -158,7 +217,10 @@ def transform_02_22(row):
 
     # Safety check: make sure we have enough columns
     if len(row) < 21:
-        return ""  # or raise an error/log it
+        logger.warning(
+            f"Skipping 02/22 row at line {line_number}: expected at least 21 columns, got {len(row)}: {row}"
+        )
+        return ""
 
     # Determine T or F
     descat = "false" if row[0].strip('"') == "02" else "true"
@@ -174,6 +236,10 @@ def transform_02_22(row):
     try:
         sale_price_1 = f"{int(sale_price_1_raw) / 100:.2f}".replace(".", ",")
     except (ValueError, TypeError):
+        logger.warning(
+            f"Line {line_number}: could not parse sale_price_1 {sale_price_1_raw!r} "
+            f"for item {item_ref} ({item_name}). Defaulting to 0,00."
+        )
         sale_price_1 = "0,00"
 
     vat_1 = mapping.get(row[9].strip('"'), "0")
@@ -183,6 +249,10 @@ def transform_02_22(row):
     try:
         sale_price_2 = f"{int(sale_price_2_raw) / 100:.2f}".replace(".", ",")
     except (ValueError, TypeError):
+        logger.warning(
+            f"Line {line_number}: could not parse sale_price_2 {sale_price_2_raw!r} "
+            f"for item {item_ref} ({item_name}). Defaulting to 0,00."
+        )
         sale_price_2 = "0,00"
 
     vat_2 = mapping.get(row[11].strip('"'), "0")
@@ -192,13 +262,16 @@ def transform_02_22(row):
     return f"{item_ref};{item_name};{department_id};{section_id};{sale_price_1};{vat_1};{price_list_code_1};{sale_price_2};{vat_2};{price_list_code_2};{descat}"
 
 
-def transform_huvudgrupp(row):
+def transform_huvudgrupp(row, line_number=None):
     """
     Transform huvudgrupp rows.
     """
 
     # Safety check: make sure we have enough columns
     if len(row) < 7:
+        logger.warning(
+            f"Skipping huvudgrupp row at line {line_number}: expected at least 7 columns, got {len(row)}: {row}"
+        )
         return ""
 
     # Determine T or F
@@ -212,11 +285,14 @@ def transform_huvudgrupp(row):
     return f"{huvudgrupp_code};{name}"
 
 
-def transform_varugrupp(row):
+def transform_varugrupp(row, line_number=None):
     """Transform varugrupp rows."""
 
     # Safety check: make sure we have enough columns
     if len(row) < 7:
+        logger.warning(
+            f"Skipping varugrupp row at line {line_number}: expected at least 7 columns, got {len(row)}: {row}"
+        )
         return ""
 
     # Determine T or F

@@ -3,19 +3,32 @@ import pandas as pd
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import pytz
-import time
 import math
 from decimal import Decimal
 
+from logger_setup import get_logger
+
+logger = get_logger(__name__)
+
+
+def _warn_unmatched_butikskoder(context, unmatched_counts):
+    """Logs one summary warning for rows skipped due to an unmapped butikskod,
+    instead of logging per-row (which would flood the log on a large file)."""
+    if unmatched_counts:
+        logger.warning(
+            f"{context}: no output file mapped for butikskod(s) {unmatched_counts} - rows skipped."
+        )
+
 
 def export_action(file_paths):
-    # Match file names to specific data objects
+    # Match file names to specific data objects. Caller (main.py) is
+    # responsible for waiting until the source files have finished being
+    # written before calling this - see wait_for_file_stable.
     forsäljning_data = None
     betalsätt_data = None
     följesedlar_data = None
     presentkort_data = None
     presentkort_sålda_data = None
-    time.sleep(1)
 
     for file_path in file_paths:
         file_name = os.path.basename(file_path)
@@ -73,13 +86,13 @@ def export_action(file_paths):
 
     # Only raise a warning if `presentkort_sålda_data` is missing
     if presentkort_sålda_data is None:
-        print("Warning: 'Presentkort_sold.csv' is missing. Proceeding without it.")
+        logger.warning("'Presentkort_sold.csv' is missing. Proceeding without it.")
 
     if presentkort_data is None:
-        print("Warning: 'Presentkort_used.csv' is missing. Proceeding without it.")
+        logger.warning("'Presentkort_used.csv' is missing. Proceeding without it.")
 
     if följesedlar_data is None:
-        print("Warning: 'Följesedlar.csv' is missing. Proceeding without it.")
+        logger.warning("'Följesedlar.csv' is missing. Proceeding without it.")
 
     file_path = file_paths[0]
     # base_dir = os.path.dirname(file_path)
@@ -106,7 +119,7 @@ def export_action(file_paths):
 
     data_99(file_map)
 
-    print(f"All files saved to folder: {export_folder}")
+    logger.info(f"All files saved to folder: {export_folder}")
 
     # Add further export functionality here
 
@@ -208,7 +221,7 @@ def data_01_02(följesedlar_data, file_map):
             matching_file = file_map.get(butikskod)
 
             if not matching_file:
-                print(f"Warning: No file found for serie {shop_id}. Skipping group.")
+                logger.warning(f"No file found for serie {shop_id}. Skipping group.")
                 continue
 
             if matching_file not in file_data:
@@ -254,8 +267,8 @@ def data_01_02(följesedlar_data, file_map):
                 ]
                 file_data[matching_file].append(mapped_row_02)
     else:
-        print(
-            "Warning: 'Följesedlar.csv' data is missing. Skipping följesedlar processing."
+        logger.warning(
+            "'Följesedlar.csv' data is missing. Skipping följesedlar processing."
         )
 
     # Write each set of rows to its corresponding file
@@ -268,6 +281,7 @@ def data_01_02(följesedlar_data, file_map):
 
 def data_03(försäljning_data, file_map):
     file_data = {}
+    unmatched = {}
 
     for _, row in försäljning_data.iterrows():
 
@@ -275,6 +289,7 @@ def data_03(försäljning_data, file_map):
         matching_file = file_map.get(butikskod)
 
         if not matching_file:
+            unmatched[butikskod] = unmatched.get(butikskod, 0) + 1
             continue
 
         butiks_nr = row["ButikskodWinbag"]
@@ -287,6 +302,8 @@ def data_03(försäljning_data, file_map):
         # ensure only one row per file
         if matching_file not in file_data:
             file_data[matching_file] = mapped_row_03
+
+    _warn_unmatched_butikskoder("data_03", unmatched)
 
     # write once per file
     for target_file, row in file_data.items():
@@ -323,7 +340,7 @@ def data_04(betalsätt_data, file_map, presentkort_sålda):
                 presentkort_sålda_data[betalmedel] += belopp
 
     else:
-        print("Warning: presentkort_sålda missing")
+        logger.warning("presentkort_sålda missing")
 
     # ----------------------------
     # MAIN LOOP
@@ -340,7 +357,7 @@ def data_04(betalsätt_data, file_map, presentkort_sålda):
         matching_file = file_map.get(butikskod)
 
         if not matching_file:
-            print(f"Missing file mapping: {butikskod}")
+            logger.warning(f"Missing file mapping: {butikskod}")
             continue
 
         if matching_file not in file_data:
@@ -408,7 +425,7 @@ def data_04(betalsätt_data, file_map, presentkort_sålda):
 
         for betalmedel, sums in sums_per_file.items():
 
-            print(
+            logger.debug(
                 f"[FINAL CHECK] {matching_file} {betalmedel} "
                 f"debet={repr(sums['debet'])} "
                 f"kredit={repr(sums['kredit'])}"
@@ -457,8 +474,8 @@ def data_04_följesedlar(följesedlar_data, file_map):
             matching_file = file_map.get(butikskod)
 
             if not matching_file:
-                print(
-                    f"Warning: Butikskod {butikskod} not found in file_map. Skipping row."
+                logger.warning(
+                    f"Butikskod {butikskod} not found in file_map. Skipping row."
                 )
                 continue
 
@@ -479,14 +496,14 @@ def data_04_följesedlar(följesedlar_data, file_map):
 
             processed_numbers_for_file[matching_file].add(number)
     else:
-        print(
-            "Warning: 'Följesedlar.csv' data is missing. Skipping följesedlar processing."
+        logger.warning(
+            "'Följesedlar.csv' data is missing. Skipping följesedlar processing."
         )
 
     for matching_file, sums in sums_per_file.items():
         konto = suffix_mapping[matching_file]
         if konto is None:
-            print(f"Warning: No Bokföringssuffix found for file {matching_file}")
+            logger.warning(f"No Bokföringssuffix found for file {matching_file}")
             continue
 
         debetbelopp = format_value_as_integer_string(sums["debet"])
@@ -539,8 +556,8 @@ def data_04_presentkort(presentkort_data, file_map):
             matching_file = file_map.get(butikskod)
 
             if not matching_file:
-                print(
-                    f"Warning: Target file for butikskod {butikskod} not found in file_map. Skipping row."
+                logger.warning(
+                    f"Target file for butikskod {butikskod} not found in file_map. Skipping row."
                 )
                 continue
 
@@ -557,15 +574,15 @@ def data_04_presentkort(presentkort_data, file_map):
                 account_mapping[matching_file] = presentkortskonto
 
     else:
-        print(
-            "Warning: 'Presentkort_used.csv' data is missing. Skipping presentkort processing."
+        logger.warning(
+            "'Presentkort_used.csv' data is missing. Skipping presentkort processing."
         )
 
     # Add the "04" rows based on stored sums for each matching file
     for matching_file, sums in sums_per_file.items():
         konto = account_mapping[matching_file]
         if konto is None:
-            print(f"Warning: No Presentkortskonto found for file {matching_file}")
+            logger.warning(f"No Presentkortskonto found for file {matching_file}")
             continue
         positive_value = format_value_as_integer_string(sums["positive"])
         negative_value = format_value_as_integer_string(sums["negative"])
@@ -588,6 +605,7 @@ def data_04_presentkort(presentkort_data, file_map):
 
 def data_05(försäljning_data, file_map):
     file_data = {}
+    unmatched = {}
 
     for _, row in försäljning_data.iterrows():
 
@@ -595,6 +613,7 @@ def data_05(försäljning_data, file_map):
         matching_file = file_map.get(butikskod)
 
         if not matching_file:
+            unmatched[butikskod] = unmatched.get(butikskod, 0) + 1
             continue
 
         butiks_nr = row["ButikskodWinbag"]
@@ -608,6 +627,8 @@ def data_05(försäljning_data, file_map):
         if matching_file not in file_data:
             file_data[matching_file] = mapped_row_05
 
+    _warn_unmatched_butikskoder("data_05", unmatched)
+
     # write once per file
     for target_file, row in file_data.items():
         with open(target_file, "a") as f:
@@ -615,6 +636,7 @@ def data_05(försäljning_data, file_map):
 
 def data_06(försäljning_data, file_map):
     file_data = {}
+    unmatched = {}
 
     for _, row in försäljning_data.iterrows():
 
@@ -622,6 +644,7 @@ def data_06(försäljning_data, file_map):
         matching_file = file_map.get(butikskod)
 
         if not matching_file:
+            unmatched[butikskod] = unmatched.get(butikskod, 0) + 1
             continue
 
         artikelNr = row["Referens"]
@@ -651,6 +674,8 @@ def data_06(försäljning_data, file_map):
 
         file_data[matching_file].append(mapped_row_06)
 
+    _warn_unmatched_butikskoder("data_06", unmatched)
+
     for target_file, rows in file_data.items():
         with open(target_file, "a") as f:
             for row in rows:
@@ -659,6 +684,7 @@ def data_06(försäljning_data, file_map):
 
 def data_07(försäljning_data, file_map):
     file_data = {}
+    unmatched = {}
 
     for _, row in försäljning_data.iterrows():
 
@@ -666,6 +692,7 @@ def data_07(försäljning_data, file_map):
         matching_file = file_map.get(butikskod)
 
         if not matching_file:
+            unmatched[butikskod] = unmatched.get(butikskod, 0) + 1
             continue
 
         butiks_nr = row["ButikskodWinbag"]
@@ -679,6 +706,8 @@ def data_07(försäljning_data, file_map):
         if matching_file not in file_data:
             file_data[matching_file] = mapped_row_07
 
+    _warn_unmatched_butikskoder("data_07", unmatched)
+
     # write once per file
     for target_file, row in file_data.items():
         with open(target_file, "a") as f:
@@ -687,6 +716,8 @@ def data_07(försäljning_data, file_map):
 def data_08(försäljning_data, file_map):
     file_data = {}
     varugrupp_data = {}
+    unmatched = {}
+    dropped_nan_varugrupp = 0
 
     for _, row in försäljning_data.iterrows():
 
@@ -694,6 +725,7 @@ def data_08(försäljning_data, file_map):
         matching_file = file_map.get(butikskod)
 
         if not matching_file:
+            unmatched[butikskod] = unmatched.get(butikskod, 0) + 1
             continue
 
         antal = int(row["Enh.1"])
@@ -725,12 +757,17 @@ def data_08(försäljning_data, file_map):
 
         varugrupp_data[matching_file][varugrupp]["antal"] += antal
         varugrupp_data[matching_file][varugrupp]["total_pris"] += pris
-        
+
+    _warn_unmatched_butikskoder("data_08", unmatched)
 
     # build output rows
     for target_file, rows in file_data.items():
 
         for varugrupp, data in varugrupp_data[target_file].items():
+
+            if varugrupp == "NaN":
+                dropped_nan_varugrupp += 1
+                continue
 
             mapped_row_08 = [
                 "08",
@@ -740,17 +777,23 @@ def data_08(försäljning_data, file_map):
                 moms,
             ]
 
-            if varugrupp != "NaN":
-                rows.append(mapped_row_08)
+            rows.append(mapped_row_08)
 
         with open(target_file, "a") as f:
             for row in rows:
                 quoted_row = [f'"{value}"' for value in row]
                 f.write(",".join(quoted_row) + "\n")
 
+    if dropped_nan_varugrupp:
+        logger.warning(
+            f"data_08: {dropped_nan_varugrupp} varugrupp group(s) had an unparseable "
+            f"Varugruppskod and were dropped from output."
+        )
+
 def data_09(försäljning_data, file_map):
 
     file_data = {}
+    unmatched = {}
 
     for _, row in försäljning_data.iterrows():
 
@@ -758,6 +801,7 @@ def data_09(försäljning_data, file_map):
         matching_file = file_map.get(butikskod)
 
         if not matching_file:
+            unmatched[butikskod] = unmatched.get(butikskod, 0) + 1
             continue
 
         butiks_nr = row["ButikskodWinbag"]
@@ -770,6 +814,8 @@ def data_09(försäljning_data, file_map):
         if matching_file not in file_data:
             file_data[matching_file] = mapped_row_09
 
+    _warn_unmatched_butikskoder("data_09", unmatched)
+
     for target_file, row in file_data.items():
         with open(target_file, "a") as f:
             quoted_row = [f'"{value}"' for value in row]
@@ -778,6 +824,7 @@ def data_09(försäljning_data, file_map):
 def data_10(försäljning_data, file_map):
     file_data = {}
     time_interval_data = {}
+    unmatched = {}
 
     for _, row in försäljning_data.iterrows():
 
@@ -785,6 +832,7 @@ def data_10(försäljning_data, file_map):
         matching_file = file_map.get(butikskod)
 
         if not matching_file:
+            unmatched[butikskod] = unmatched.get(butikskod, 0) + 1
             continue
 
         antal = int(row["Enh.1"])
@@ -815,6 +863,8 @@ def data_10(försäljning_data, file_map):
         time_interval_data[matching_file][time_interval]["antal"] += antal
         time_interval_data[matching_file][time_interval]["total_pris"] += pris
 
+    _warn_unmatched_butikskoder("data_10", unmatched)
+
     for target_file, time_data in time_interval_data.items():
         for time_interval, data in time_data.items():
 
@@ -835,6 +885,7 @@ def data_10(försäljning_data, file_map):
 def data_11(försäljning_data, file_map):
 
     file_data = {}
+    unmatched = {}
 
     for _, row in försäljning_data.iterrows():
 
@@ -842,6 +893,7 @@ def data_11(försäljning_data, file_map):
         matching_file = file_map.get(butikskod)
 
         if not matching_file:
+            unmatched[butikskod] = unmatched.get(butikskod, 0) + 1
             continue
 
         butiks_nr = row["ButikskodWinbag"]
@@ -854,6 +906,8 @@ def data_11(försäljning_data, file_map):
 
         mapped_row_11 = ["11", butiks_nr, kassa_nr, datum]
         file_data[matching_file].append(mapped_row_11)
+
+    _warn_unmatched_butikskoder("data_11", unmatched)
 
     for target_file in file_data.keys():
         with open(target_file, "a") as f:
@@ -878,8 +932,8 @@ def data_12(moms_data, file_map):
 
 
         if not matching_file:
-            print(
-                f"Warning: Butikskod {butikskod} not found in file_map. Skipping row."
+            logger.warning(
+                f"Butikskod {butikskod} not found in file_map. Skipping row."
             )
             continue
 
@@ -991,7 +1045,7 @@ def smart_parse_amount(amount):
             try:
                 return Decimal(s)
             except ValueError:
-                print(f"⚠️ Failed to parse amount: {s}")
+                logger.warning(f"Failed to parse amount: {s}")
                 return Decimal(0)
 
     # No dot or comma — just a raw number
