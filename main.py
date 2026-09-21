@@ -10,6 +10,7 @@ from watchdog.events import FileSystemEventHandler
 from export import export_action
 from import_ import import_action
 from logger_setup import get_logger
+from version import BUILD_TIMESTAMP
 
 logger = get_logger(__name__)
 
@@ -231,7 +232,7 @@ if __name__ == "__main__":
     export_required_keywords = ["Försäljning", "Betalsätt", "Följesedlar", "Moms"]
     import_required_keyword = "PCS.ADM"
 
-    logger.info("WinBag2Hiopos starting up.")
+    logger.info(f"WinBag2Hiopos starting up. Build: {BUILD_TIMESTAMP}")
 
     if os.path.exists(export_folder) and os.path.exists(import_folder):
         monitor_folders(export_folder, import_folder, export_required_keywords, import_required_keyword)
