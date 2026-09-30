@@ -1,4 +1,5 @@
 import os
+import re
 import pytz
 import csv
 from datetime import datetime
@@ -62,7 +63,12 @@ def import_action(file_paths):
     unrecognized_codes = {}
 
     try:
-        with open(pcs_file_path, "r", encoding="cp1252") as pcs_in, open(
+        # newline="" + feeding the whole file object to csv.reader (rather than
+        # reading it line-by-line first) is required so a quoted field that
+        # contains an embedded newline - e.g. multi-line "ingredients" text -
+        # is correctly read as one field instead of getting cut into several
+        # bogus rows. See https://docs.python.org/3/library/csv.html.
+        with open(pcs_file_path, "r", encoding="cp1252", newline="") as pcs_in, open(
             tmp_paths[0], "w", encoding="cp1252"
         ) as out1, open(tmp_paths[1], "w", encoding="cp1252") as out2, open(
             tmp_paths[2], "w", encoding="cp1252"
@@ -70,21 +76,12 @@ def import_action(file_paths):
             tmp_paths[3], "w", encoding="cp1252"
         ) as out4:
 
-            for line_number, line in enumerate(pcs_in, start=1):
-                # Remove trailing newline/spaces
-                clean_line = line.strip()
-                if not clean_line:
-                    continue  # skip empty lines
-
-                try:
-                    reader = csv.reader([clean_line], delimiter=",", quotechar='"')
-                    row = next(reader)
-                except (csv.Error, StopIteration):
-                    logger.warning(
-                        f"Skipping malformed CSV line {line_number} in {pcs_file_path}: {clean_line!r}"
-                    )
-                    skipped_rows += 1
-                    continue
+            reader = csv.reader(pcs_in, delimiter=",", quotechar='"')
+            for row in reader:
+                # line_num is the count of physical lines consumed so far,
+                # including the extra lines inside a multi-line quoted field -
+                # close enough to point at the right spot in the source file.
+                line_number = reader.line_num
 
                 # We need at least one column to proceed
                 if not row:
@@ -202,11 +199,13 @@ def transform_02_22(row, line_number=None):
        row[0] -> "02" or "22"
        row[3] -> "2"
        row[4] -> "Soppa & t�rtbit TA"
+       row[5] -> "7340024372404" (barcode)
        row[6] -> "60"
        row[7] -> "63"
        row[8] -> "7500"
        row[9] -> "1200"
        row[10] -> "7500"
+       row[20] -> ingredients text (last column)
     """
 
     mapping = {
@@ -228,8 +227,16 @@ def transform_02_22(row, line_number=None):
     # Extract columns (strip() to remove accidental whitespace)
     item_ref = row[3].strip('"')
     item_name = row[4].strip('"')
+    barcode = row[5].strip('"')
     department_id = row[6].strip('"')
     section_id = row[7].strip('"')
+
+    # The ingredients field is free text and sometimes has embedded CR/LF
+    # characters (either stray trailing junk from the source system, or
+    # genuine multi-section text like "Fyllning och dekor: ..."). Either way
+    # it must end up on a single output line, so collapse any run of them
+    # into one space rather than writing them through literally.
+    ingredients = re.sub(r"[\r\n]+", " ", row[20].strip('"')).strip()
 
     sale_price_1_raw = row[8].strip('"').strip()
     # Convert to integer, divide by 100, or default to "0" if empty/invalid
@@ -259,7 +266,7 @@ def transform_02_22(row, line_number=None):
     price_list_code_2 = 2
 
     # Build the final string, semicolon-delimited
-    return f"{item_ref};{item_name};{department_id};{section_id};{sale_price_1};{vat_1};{price_list_code_1};{sale_price_2};{vat_2};{price_list_code_2};{descat}"
+    return f"{item_ref};{item_name};{barcode};{department_id};{section_id};{sale_price_1};{vat_1};{price_list_code_1};{sale_price_2};{vat_2};{price_list_code_2};{descat};{ingredients}"
 
 
 def transform_huvudgrupp(row, line_number=None):
