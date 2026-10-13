@@ -24,12 +24,26 @@ def move_files_to_old_folder(file_paths, folder_to_watch):
     current_time = datetime.now(stockholm_tz).strftime("%Y%m%d-%H-%M-%S")
 
     for file_path in file_paths:
+        if not os.path.exists(file_path):
+            logger.warning(
+                f"{file_path} no longer exists - it was likely already picked up by "
+                f"another running copy of this program. Skipping it."
+            )
+            continue
+
         file_name = os.path.basename(file_path)
         file_name_parts = os.path.splitext(file_name)
         new_file_name = f"{file_name_parts[0]}_{current_time}_old{file_name_parts[1]}"
 
         old_file_path = os.path.join(old_folder_path, new_file_name)
-        shutil.move(file_path, old_file_path)
+        try:
+            shutil.move(file_path, old_file_path)
+        except FileNotFoundError:
+            logger.warning(
+                f"{file_path} disappeared while being archived - it was likely already "
+                f"picked up by another running copy of this program. Skipping it."
+            )
+            continue
         logger.info(f"Moved {file_name} to 'Old Files' as {new_file_name}.")
 
 def wait_for_file_stable(file_path, poll_interval=0.5, stable_checks=3, timeout=60):
@@ -60,7 +74,15 @@ def wait_for_file_stable(file_path, poll_interval=0.5, stable_checks=3, timeout=
         last_size = current_size
         time.sleep(poll_interval)
 
-    logger.warning(f"Timed out waiting for {file_path} to finish being written; proceeding anyway.")
+    if not os.path.exists(file_path):
+        logger.warning(
+            f"{file_path} no longer exists after waiting for it to stabilize - it was "
+            f"likely already picked up by another running copy of this program. "
+            f"(If this keeps happening, check for a second/old service watching the "
+            f"same folder.)"
+        )
+    else:
+        logger.warning(f"Timed out waiting for {file_path} to finish being written; proceeding anyway.")
     return False
 
 def extract_date_from_filename(filename):
@@ -75,7 +97,20 @@ def archive_pcs_file(file_path):
     archive folder BEFORE processing starts. Doing this first (rather than
     after import_action runs) closes the window where a leftover pcs.adm in
     the root folder gets picked up and re-imported by an unrelated file event.
+
+    Returns None (instead of raising) if the file is gone by the time we get
+    here - this happens if another running copy of this program (e.g. an old
+    service left over from a previous install, watching the same folder
+    under a different name) already grabbed it first.
     """
+    if not os.path.exists(file_path):
+        logger.warning(
+            f"{file_path} no longer exists - it was likely already picked up by "
+            f"another running copy of this program. Skipping it. (If this keeps "
+            f"happening, check Services for a second/old WinBag2Hiopos service.)"
+        )
+        return None
+
     archive_folder = os.path.join("C:/winbag_export", "PCS_Archive")
     if not os.path.exists(archive_folder):
         os.makedirs(archive_folder)
@@ -89,7 +124,15 @@ def archive_pcs_file(file_path):
     new_file_name = f"{file_name_parts[0]}_{current_time}{file_name_parts[1]}"
     new_file_path = os.path.join(archive_folder, new_file_name)
 
-    shutil.move(file_path, new_file_path)
+    try:
+        shutil.move(file_path, new_file_path)
+    except FileNotFoundError:
+        logger.warning(
+            f"{file_path} disappeared while being archived - it was likely already "
+            f"picked up by another running copy of this program. Skipping it."
+        )
+        return None
+
     logger.info(f"Archived {file_name} to 'PCS_Archive' as {new_file_name}.")
     return new_file_path
 
@@ -105,6 +148,8 @@ def custom_import_action(file_paths):
     try:
         logger.info("Performing import...")
         archived_path = archive_pcs_file(file_paths[0])
+        if archived_path is None:
+            return
         import_action([archived_path])
     except Exception:
         logger.exception("An error occurred during import_action")

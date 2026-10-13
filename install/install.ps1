@@ -67,6 +67,25 @@ foreach ($file in @($exeSource, $nssmSource)) {
     if (-not (Test-Path $file)) { Fail "Missing file: $file" }
 }
 
+# --- Warn about any OTHER service that looks like it might also be
+# watching $DataFolder (e.g. an old manual install from before this
+# installer existed, under a different service name). Two copies both
+# watching the same folder race each other for the same files, which looks
+# like files vanishing/failing to process for no reason. This does not
+# block the install - the user decides whether to remove the old one.
+$otherWinbagServices = Get-CimInstance Win32_Service |
+    Where-Object { $_.Name -ne $ServiceName -and ($_.Name -match "winbag" -or $_.PathName -match "winbag") }
+if ($otherWinbagServices) {
+    Write-Host ""
+    Write-Host "WARNING: found other service(s) that look WinBag-related:" -ForegroundColor Yellow
+    foreach ($svc in $otherWinbagServices) {
+        Write-Host "    $($svc.Name)  ($($svc.State))  ->  $($svc.PathName)" -ForegroundColor Yellow
+    }
+    Write-Host "  If any of these also watch $DataFolder, it will race this new service" -ForegroundColor Yellow
+    Write-Host "  for the same files. Stop/remove it (services.msc or 'sc delete <name>')" -ForegroundColor Yellow
+    Write-Host "  if it's a leftover from an earlier install." -ForegroundColor Yellow
+}
+
 # --- Remove an existing service (update) --------------------------------
 $existing = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($existing) {
